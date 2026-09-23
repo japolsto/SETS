@@ -1,10 +1,10 @@
-// SETS LIVE controller. Raises a panic flag and optionally POSTs it.
-// No Coinbase credentials. No orders are placed from this page.
+// SETS LIVE demonstration. STOP latches a local panic flag.
+// No Coinbase credentials, no webhook destination, no orders.
 
 import { drawLogo, sized } from './ui/draw.js';
 import {
   BANNER_TEXT, CONFIRM_TEXT, KEYS, MAX_LOSS_USD, MODE, PLACEHOLDER, PORTFOLIO,
-  canArm, killFraction, loadState, reduce, webhookPlan, writeStore,
+  canArm, killFraction, loadState, reduce, writeStore,
 } from './live/state.js';
 
 const $ = (id) => document.getElementById(id);
@@ -64,7 +64,7 @@ function render() {
 
   const frac = killFraction(null, MAX_LOSS_USD);
   $('killNote').textContent = panic
-    ? 'PANIC IS OPERATOR-RAISED. There is still no live mark. Kill stays at −$' + MAX_LOSS_USD + '.'
+    ? 'Local PANIC flag only. There is still no live mark, and liquidation is not wired. Kill stays at −$' + MAX_LOSS_USD + '.'
     : 'PLACEHOLDER. No account feed, so the marker stays at $0. Kill is −$' + MAX_LOSS_USD + '.';
   kill.el.dataset.frac = frac == null ? 'none' : String(frac);
 
@@ -100,13 +100,6 @@ function render() {
   arm.classList.toggle('on', state.mode === MODE.ARMED);
   $('bDisarm').disabled = state.mode !== MODE.ARMED;
   $('bClear').disabled = !panic;
-
-  const hook = $('webhook');
-  if (document.activeElement !== hook && hook.value !== state.webhookUrl) hook.value = state.webhookUrl;
-  $('hookState').textContent = state.webhookNote
-    || (state.webhookUrl
-      ? 'Webhook ready. It sends only after STOP is confirmed.'
-      : 'No webhook. STOP latches panic on this browser only.');
 
   $('bStop').setAttribute('aria-pressed', panic ? 'true' : 'false');
   drawKill();
@@ -164,49 +157,21 @@ function openModal(kind) {
     $('modalTitle').textContent = panic ? 'PANIC ALREADY LATCHED' : 'CONFIRM STOP';
     $('modalBody').textContent = CONFIRM_TEXT;
     $('modalWarn').textContent = panic
-      ? 'Confirming again keeps PANIC latched and resends the webhook if one is set. This page still cannot place the Coinbase order. Trade Oversight executes cancel, sell, and the USDC convert in SETS-500 only.'
-      : 'Confirming latches PANIC in this browser and, if a webhook is set, POSTs the panic JSON. This page cannot place the Coinbase order. Trade Oversight executes cancel, sell, and the USDC convert in SETS-500 only.';
-    $('modalOk').textContent = BANNER_TEXT;
+      ? 'PANIC is already a local flag. Confirming again changes nothing on an exchange. Liquidation is not wired. No order is sent.'
+      : 'This latches PANIC in this browser and nothing else. It does not cancel orders, sell BTC, or convert to USDC. Liquidation is not wired.';
+    $('modalOk').textContent = 'LATCH PANIC';
   } else {
     $('modalTitle').textContent = 'CLEAR PANIC (OPERATOR)';
     $('modalBody').textContent = 'Clear the local panic flag for ' + PORTFOLIO + '?';
-    $('modalWarn').textContent = 'This does not cancel orders, does not buy back BTC, and does not talk to Coinbase. Do it only after you have checked the SETS-500 silo. The panel returns to DISARMED.';
+    $('modalWarn').textContent = 'Clears the local flag only. This page never sent a cancel, sell, or convert. The panel returns to DISARMED.';
     $('modalOk').textContent = 'CLEAR PANIC';
   }
   if (!modal.open) modal.showModal();
   $('modalCancel').focus();
 }
 
-async function confirmStop() {
-  const now = new Date().toISOString();
-  state = reduce(state, { type: 'stop' }, now);
-  writeStore(store, state);
-  render();
-  const plan = webhookPlan(state.webhookUrl);
-  if (!plan.post) {
-    commit(reduce(state, { type: 'webhook-result', text: plan.detail }, now));
-    return;
-  }
-  state = reduce(state, { type: 'webhook-result', text: 'Posting STOP_LIQUIDATE_USDC…' }, now);
-  render();
-  try {
-    const res = await fetch(plan.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(plan.body),
-      keepalive: true,
-    });
-    const text = res.ok
-      ? 'Webhook accepted (' + res.status + '). Operator still executes the Coinbase cancel and USDC convert.'
-      : 'Webhook returned ' + res.status + '. Panic stays latched. Operator must still liquidate SETS-500.';
-    commit(reduce(state, { type: 'webhook-result', text }, new Date().toISOString()));
-  } catch (err) {
-    const why = err && err.message ? err.message : 'network';
-    commit(reduce(state, {
-      type: 'webhook-result',
-      text: 'Webhook failed (' + why + '). Panic stays latched. Operator must still liquidate SETS-500.',
-    }, new Date().toISOString()));
-  }
+function confirmStop() {
+  commit(reduce(state, { type: 'stop' }, new Date().toISOString()));
 }
 
 function clearPanic() {
@@ -224,9 +189,6 @@ $('bDisarm').addEventListener('click', () => {
 });
 $('ack').addEventListener('change', () => {
   commit(reduce(state, { type: 'ack', value: $('ack').checked }, new Date().toISOString()));
-});
-$('webhook').addEventListener('input', () => {
-  commit(reduce(state, { type: 'webhook', url: $('webhook').value }, new Date().toISOString()));
 });
 
 modal.addEventListener('click', (e) => { if (e.target === modal) modal.close('cancel'); });

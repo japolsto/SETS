@@ -39,7 +39,7 @@ Every 4.8 seconds a new generation is born. Immigrants and offspring appear in t
 - Keyboard: **Space** pause, **→** step, **1–4** speed.
 - URL options: `?seed=42`, `?speed=4`, `?warm=50` (evolve 50 generations instantly on load), `?paused`.
 - Works on phones: panels stack, nothing scrolls sideways.
-- **LIVE ›** opens the operator panel for the capped SETS-500 silo. It is not part of the paper loop.
+- **LIVE DEMO ›** opens a labeled demonstration of an operator screen. It is not part of the paper loop, and it is not connected to an exchange.
 
 <p align="center"><img src="docs/images/mobile.png" width="300" alt="SETS MACHINE on a 390 px wide phone screen"></p>
 
@@ -47,17 +47,19 @@ Full-page screenshot: [docs/images/dashboard.png](docs/images/dashboard.png)
 
 ## LIVE operator panel
 
-Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `live.html` at the site root, which forwards there) is the operator UI for a separate capped Coinbase silo:
+Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `live.html` at the site root, which forwards there) is an **operator-UI demonstration only**. The page is labeled **DEMO · NOT CONNECTED · UI ONLY**. It is not an emergency exit. Passing the browser tests does not establish Coinbase isolation, and these tests do not establish Coinbase isolation of any account.
 
-| | Paper machine | LIVE panel |
+| | Paper machine | LIVE demonstration |
 | --- | --- | --- |
-| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows the SETS-500 silo: BTC-USD spot, max loss −$75, arm state, placeholders for cash / BTC / equity / frozen genome |
+| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows a SETS-500 mock: BTC-USD spot, max loss −$75, a dry-run arm state, placeholders for cash / BTC / equity / frozen genome |
 | Orders | Simulated fills on the bundled tape | None. The page stores no Coinbase API keys and cannot cancel, sell, or convert |
-| Stop | A strategy stop inside the paper bot | A red STOP that asks “Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only?”, then latches PANIC |
+| Stop | A strategy stop inside the paper bot | A red STOP that latches a **local** PANIC flag in this browser. Liquidation is not wired |
 
-STOP writes a panic flag to `localStorage`. The screen shows **LIQUIDATE→USDC**. If a webhook URL is set in the field or with `?panicWebhook=`, the page also POSTs `{ "action": "STOP_LIQUIDATE_USDC", "portfolio": "SETS-500" }`. That ping is optional. Static Pages cannot place the Coinbase order. Trade Oversight / the operator executes the cancel, the sell, and the USDC convert in SETS-500 only.
+STOP writes `sets.live.panic` to `localStorage` and shows **PANIC LATCHED**. It does not send a webhook. `?panicWebhook=` is ignored, and the page has no field that can choose a STOP destination. Nothing on this page cancels orders, sells BTC, or converts to USDC.
 
-ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. DISARM does not clear panic. The only reset is **CLEAR PANIC (OPERATOR)**, which warns that clearing the flag does not undo a liquidation.
+ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. That control is a dry-run demo. Operational arm is not connected. DISARM does not clear panic. The only reset is **CLEAR PANIC (OPERATOR)**, which clears the local flag and does not undo an order, because no order was sent.
+
+A future real STOP wire-up, which this demonstration does not implement, would need a fixed, authenticated destination and a command tied to an approved session (a session id and a request id). A URL typed into the page or passed as a query parameter would not be that destination, and a bare action plus portfolio name would not be that command.
 
 ## Promo
 
@@ -144,7 +146,7 @@ Read this before getting excited:
 - Picking the leader from configs that passed the gate reuses the out-of-sample data, so its numbers are optimistic.
 - High win rates come from wide stops that were never hit in this window. That is exactly the risk a grid carries.
 
-SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money. The [LIVE operator panel](#live-operator-panel) is a switch for a separate capped silo. It still has no API keys and cannot send orders.
+SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money. The [LIVE operator panel](#live-operator-panel) is a labeled demonstration, not a connection to a capped silo. It has no API keys and cannot send orders.
 
 ## Under the hood
 
@@ -153,8 +155,8 @@ index.html            Redirects to dist/ (for GitHub Pages)
 live.html             Redirects to dist/live.html
 dist/
   index.html          Paper dashboard shell and controls. Links to LIVE
-  live.html           SETS-500 operator panel: arm state, kill bar, red STOP
-  live.js             Panic flag, confirm flow, optional webhook POST
+  live.html           SETS LIVE demonstration: DEMO banner, dry-run arm, local STOP
+  live.js             Local panic flag and confirm flow. No webhook and no orders
   live.css            LIVE layout. The red STOP stays on screen
   live/state.js       Arm / panic state machine, no DOM and no credentials
   app.js              Controller: generation timeline, paper trading, UI state
@@ -172,7 +174,7 @@ tests/                Node test runner: data, indicators, bot mechanics, GA, LIV
 docs/                 README images, GIFs and the promo video
 ```
 
-Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. The paper dashboard makes no external requests. SETS LIVE requests nothing until an operator confirms STOP with a webhook URL filled in.
+Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. The paper dashboard and the SETS LIVE demonstration make no external requests.
 
 ## Credits & licence
 

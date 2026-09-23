@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SETS LIVE · SETS-500</title>
-<meta name="description" content="Operator panel for the capped SETS-500 Coinbase silo. Raises a panic flag only. Places no orders and stores no API keys.">
+<title>SETS LIVE · DEMO · NOT CONNECTED</title>
+<meta name="description" content="Demonstration of a SETS-500 operator panel. UI only. Not connected. STOP latches a local flag and does not send orders.">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="live.css">
@@ -16,16 +16,23 @@
     <canvas id="logo" class="logo" aria-hidden="true"></canvas>
     <div class="brand">
       <h1>SETS <span>LIVE</span></h1>
-      <div class="sub"><b>S</b>ETS-500 · <b>B</b>TC-USD SPOT · MAX LOSS −$75 · NO KEYS</div>
+      <div class="sub">DEMO · NOT CONNECTED · UI ONLY · SETS-500 · BTC-USD SPOT · MAX LOSS −$75</div>
     </div>
     <a class="btn back" href="index.html">‹ PAPER</a>
     <div class="clock"><b id="clock">--:--:--</b><span class="pill idle" id="pill"><i></i><em id="pillText">DISARMED</em></span></div>
   </header>
 
+  <div class="demo-banner" role="status">
+    <b>DEMO</b>
+    <span>NOT CONNECTED</span>
+    <span>UI ONLY</span>
+    <p>Operator-UI demonstration. Not an emergency exit. STOP latches a local flag in this browser. Liquidation is not wired.</p>
+  </div>
+
   <div id="banner" class="panic-banner" hidden role="status" aria-live="assertive">
-    <div class="kicker">PANIC · SETS-500 · BTC-USD SPOT</div>
-    <div class="word" id="bannerWord">LIQUIDATE→USDC</div>
-    <p>Cancel all SETS orders and sell SETS-owned BTC to USDC in this silo only. This page raised the flag. Trade Oversight executes the Coinbase cancel, sell, and convert.</p>
+    <div class="kicker">LOCAL FLAG · SETS-500 · NOT AN ORDER</div>
+    <div class="word" id="bannerWord">PANIC LATCHED</div>
+    <p>Local flag only. Liquidation is not wired. This page did not cancel, sell, or convert anything.</p>
   </div>
 
   <section class="panel status-hero" aria-labelledby="armLabel">
@@ -78,43 +85,43 @@
   </section>
 
   <section class="panel ops">
-    <div class="ph"><h2>OPERATOR</h2><span class="r">BROWSER CANNOT TRADE</span></div>
+    <div class="ph"><h2>OPERATOR</h2><span class="r">DRY-RUN DEMO</span></div>
     <label class="check" for="ack">
       <input id="ack" type="checkbox">
-      <span>Acknowledge dry run. This panel does not send Coinbase orders. Arm stays off until this is checked, and stays off during panic.</span>
+      <span>Acknowledge dry run. ARM here is not an operational arm. It stays off until this is checked, and it stays off during panic. This panel does not send orders.</span>
     </label>
     <div class="op-row">
       <button id="bArm" class="btn pri" type="button" disabled>ARM</button>
       <button id="bDisarm" class="btn" type="button" disabled>DISARM</button>
       <button id="bClear" class="btn warn" type="button" disabled>CLEAR PANIC (OPERATOR)</button>
     </div>
-    <label class="hook" for="webhook">PANIC WEBHOOK
-      <input id="webhook" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://… optional · or open with ?panicWebhook=">
-    </label>
-    <p class="phs" id="hookHelp">On confirm, POST {"action":"STOP_LIQUIDATE_USDC","portfolio":"SETS-500"}. Leave blank to latch panic locally only. The endpoint must allow this page's origin.</p>
-    <p class="hook-state" id="hookState" role="status"></p>
+    <div class="demo-note">
+      <label>STOP DESTINATION</label>
+      <p>Not connected. This page has no webhook field and ignores <span class="mono">?panicWebhook=</span>. A query string cannot choose where STOP goes, because STOP does not go anywhere.</p>
+      <p>A future real STOP, which this demonstration does not implement, would need a fixed, authenticated destination and a command tied to an approved session (a session id and a request id). A bare action and portfolio name would not be that command.</p>
+    </div>
   </section>
 
   <footer class="foot">
-    Paper evolution stays paper. SETS LIVE is the operator UI for the capped SETS-500 silo.
-    Static Pages cannot place Coinbase orders. When panic is raised, Trade Oversight executes cancel, sell, and the USDC convert in SETS-500 only.
+    Paper evolution stays paper. SETS LIVE is a demonstration of an operator screen, not an emergency exit.
+    It cannot place Coinbase orders. Liquidation is not wired. Browser tests do not establish Coinbase isolation.
     No API keys. Not financial advice.
   </footer>
 </main>
 
-<div class="stop-dock" role="region" aria-label="Emergency stop">
+<div class="stop-dock" role="region" aria-label="Demonstration stop">
   <button id="bStop" class="stop" type="button" aria-describedby="stopHint">STOP</button>
-  <span id="stopHint">Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only. Always visible. Asks before it latches panic.</span>
+  <span id="stopHint">Latches a local PANIC flag in this browser. Liquidation is not wired. Asks before it latches.</span>
 </div>
 
 <dialog id="modal" aria-labelledby="modalTitle">
   <form method="dialog">
     <h2 id="modalTitle">CONFIRM STOP</h2>
-    <p id="modalBody">Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only?</p>
+    <p id="modalBody">Latch a local PANIC flag for SETS-500 in this browser only?</p>
     <p id="modalWarn"></p>
     <div class="modal-actions">
       <button type="submit" id="modalCancel" class="btn" value="cancel">BACK</button>
-      <button type="submit" id="modalOk" class="btn stop-ok" value="ok">LIQUIDATE→USDC</button>
+      <button type="submit" id="modalOk" class="btn stop-ok" value="ok">LATCH PANIC</button>
     </div>
   </form>
 </dialog>

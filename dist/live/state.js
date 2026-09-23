@@ -1,13 +1,15 @@
-// SETS LIVE operator state. This module never talks to an exchange and never
-// holds credentials. Panic is a flag for the operator, plus an optional webhook.
+// SETS LIVE demonstration state. This module never talks to an exchange,
+// never holds credentials, and never chooses a STOP destination.
+// Panic is a local flag. Liquidation is not wired.
 
 export const PORTFOLIO = 'SETS-500';
 export const PAIR = 'BTC-USD';
 export const MARKET = 'SPOT';
 export const MAX_LOSS_USD = 75;
-export const STOP_ACTION = 'STOP_LIQUIDATE_USDC';
-export const CONFIRM_TEXT = 'Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only?';
-export const BANNER_TEXT = 'LIQUIDATE→USDC';
+export const DEMO_LABEL = 'DEMO · NOT CONNECTED · UI ONLY';
+export const CONFIRM_TEXT = 'Latch a local PANIC flag for SETS-500 in this browser only?';
+export const BANNER_TEXT = 'PANIC LATCHED';
+export const LEGACY_WEBHOOK_KEY = 'sets.live.webhook';
 
 export const MODE = {
   DISARMED: 'DISARMED',
@@ -20,7 +22,6 @@ export const KEYS = {
   panicAt: 'sets.live.panicAt',
   arm: 'sets.live.arm',
   dryRunAck: 'sets.live.dryRunAck',
-  webhook: 'sets.live.webhook',
 };
 
 export const PLACEHOLDER = {
@@ -35,32 +36,6 @@ export const PLACEHOLDER = {
 
 const LOG_MAX = 40;
 
-export function panicPayload() {
-  return { action: STOP_ACTION, portfolio: PORTFOLIO };
-}
-
-export function isHttpUrl(url) {
-  if (typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  if (!trimmed) return false;
-  let parsed;
-  try { parsed = new URL(trimmed); } catch { return false; }
-  if (parsed.username || parsed.password) return false;
-  return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-}
-
-// What STOP should do with the optional webhook. Panic is latched either way.
-export function webhookPlan(url) {
-  const trimmed = (url || '').trim();
-  if (!trimmed) {
-    return { post: false, reason: 'skipped', detail: 'No webhook URL. Panic is latched in this browser only.' };
-  }
-  if (!isHttpUrl(trimmed)) {
-    return { post: false, reason: 'rejected', detail: 'Webhook must be an http(s) URL without embedded credentials. Nothing was sent.' };
-  }
-  return { post: true, reason: 'post', url: trimmed, body: panicPayload() };
-}
-
 export function canArm(state) {
   return !!state.dryRunAck && state.mode !== MODE.PANIC;
 }
@@ -70,13 +45,6 @@ export function killFraction(pnl, maxLoss = MAX_LOSS_USD) {
   if (pnl == null || !Number.isFinite(pnl) || maxLoss <= 0) return null;
   const loss = Math.max(0, -pnl);
   return Math.max(0, Math.min(1, loss / maxLoss));
-}
-
-export function webhookFromSearch(search) {
-  const raw = search == null ? '' : String(search);
-  const q = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
-  if (!q.has('panicWebhook')) return undefined;
-  return (q.get('panicWebhook') || '').trim().slice(0, 2000);
 }
 
 function stamp(now, kind, text) {
@@ -89,11 +57,14 @@ function pushLog(state, row) {
   return log;
 }
 
+function scrubDestination(storage) {
+  storage.removeItem(LEGACY_WEBHOOK_KEY);
+}
+
 export function readStore(storage) {
   const panic = storage.getItem(KEYS.panic) === '1';
   const dryRunAck = storage.getItem(KEYS.dryRunAck) === '1';
   const arm = storage.getItem(KEYS.arm);
-  const webhookUrl = storage.getItem(KEYS.webhook) || '';
   const panicAt = storage.getItem(KEYS.panicAt) || null;
   let mode = MODE.DISARMED;
   if (panic) mode = MODE.PANIC;
@@ -101,39 +72,33 @@ export function readStore(storage) {
   return {
     mode,
     dryRunAck,
-    webhookUrl,
     panicAt: mode === MODE.PANIC ? panicAt : null,
   };
 }
 
 export function writeStore(storage, state) {
+  scrubDestination(storage);
   storage.setItem(KEYS.panic, state.mode === MODE.PANIC ? '1' : '0');
   if (state.mode === MODE.PANIC && state.panicAt) storage.setItem(KEYS.panicAt, String(state.panicAt));
   else storage.removeItem(KEYS.panicAt);
   storage.setItem(KEYS.arm, state.mode === MODE.ARMED ? MODE.ARMED : MODE.DISARMED);
   storage.setItem(KEYS.dryRunAck, state.dryRunAck ? '1' : '0');
-  storage.setItem(KEYS.webhook, state.webhookUrl || '');
 }
 
-export function loadState(storage, search, now) {
+// `search` is accepted and ignored. A query string must not choose a destination.
+export function loadState(storage, _search, now) {
+  scrubDestination(storage);
   const saved = readStore(storage);
-  const fromQuery = webhookFromSearch(search);
-  const webhookUrl = fromQuery === undefined ? saved.webhookUrl : fromQuery;
-  const log = [stamp(now, 'SYS', 'Panel idle. No exchange connection. Cash, BTC, equity, genome, orders, and P&L are placeholders.')];
+  const log = [stamp(now, 'SYS', 'Demonstration idle. Not connected. Cash, BTC, equity, genome, orders, and P&L are placeholders. STOP only latches a local flag.')];
   if (saved.mode === MODE.PANIC) {
-    log.push(stamp(now, 'PANIC', 'Panic flag restored from this browser. LIQUIDATE→USDC still waits on the operator.'));
+    log.push(stamp(now, 'PANIC', 'Local panic flag restored from this browser. Liquidation is not wired.'));
   } else if (saved.mode === MODE.ARMED) {
-    log.push(stamp(now, 'ARM', 'Armed state restored from this browser.'));
-  }
-  if (fromQuery !== undefined && fromQuery !== saved.webhookUrl) {
-    log.push(stamp(now, 'HOOK', fromQuery ? 'Panic webhook set from ?panicWebhook=.' : 'Panic webhook cleared from ?panicWebhook=.'));
+    log.push(stamp(now, 'ARM', 'Dry-run demo arm restored from this browser. Operational arm is not connected.'));
   }
   return {
     mode: saved.mode,
     dryRunAck: saved.dryRunAck,
-    webhookUrl,
     panicAt: saved.panicAt,
-    webhookNote: '',
     log,
   };
 }
@@ -151,7 +116,7 @@ export function reduce(state, action, now = null) {
           ...state,
           dryRunAck: false,
           mode: MODE.DISARMED,
-          log: pushLog(state, stamp(now, 'ARM', 'Dry-run acknowledgement cleared. SETS-500 disarmed.')),
+          log: pushLog(state, stamp(now, 'ARM', 'Dry-run acknowledgement cleared. Demo disarmed. Operational arm is not connected.')),
         };
       }
       if (state.dryRunAck === dryRunAck) return state;
@@ -162,7 +127,7 @@ export function reduce(state, action, now = null) {
       return {
         ...state,
         mode: MODE.ARMED,
-        log: pushLog(state, stamp(now, 'ARM', 'Operator armed SETS-500. This browser still cannot place orders.')),
+        log: pushLog(state, stamp(now, 'ARM', 'Dry-run demo armed. This is not an operational arm. This browser cannot place orders.')),
       };
     }
     case 'disarm': {
@@ -170,7 +135,7 @@ export function reduce(state, action, now = null) {
       return {
         ...state,
         mode: MODE.DISARMED,
-        log: pushLog(state, stamp(now, 'ARM', 'Operator disarmed SETS-500.')),
+        log: pushLog(state, stamp(now, 'ARM', 'Dry-run demo disarmed.')),
       };
     }
     case 'stop': {
@@ -180,20 +145,8 @@ export function reduce(state, action, now = null) {
         mode: MODE.PANIC,
         panicAt: state.panicAt || now,
         log: pushLog(state, stamp(now, 'PANIC', already
-          ? 'STOP confirmed again. Panic stays latched. LIQUIDATE→USDC.'
-          : 'STOP confirmed. Panic latched. LIQUIDATE→USDC. Operator must cancel and sell in SETS-500 only.')),
-      };
-    }
-    case 'webhook': {
-      const url = typeof action.url === 'string' ? action.url.trim().slice(0, 2000) : '';
-      if (url === state.webhookUrl) return state;
-      return { ...state, webhookUrl: url };
-    }
-    case 'webhook-result': {
-      return {
-        ...state,
-        webhookNote: action.text,
-        log: pushLog(state, stamp(now, 'HOOK', action.text)),
+          ? 'STOP confirmed again. Local panic flag stays latched. Nothing was sent.'
+          : 'STOP confirmed. Local panic flag latched. Liquidation is not wired. No order was sent.')),
       };
     }
     case 'clear-panic': {
@@ -202,7 +155,7 @@ export function reduce(state, action, now = null) {
         ...state,
         mode: MODE.DISARMED,
         panicAt: null,
-        log: pushLog(state, stamp(now, 'ARM', 'Operator cleared the panic flag. This does not undo a liquidation. Panel is DISARMED.')),
+        log: pushLog(state, stamp(now, 'ARM', 'Local panic flag cleared. No liquidation was sent. Panel is DISARMED.')),
       };
     }
     default:
