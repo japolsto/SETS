@@ -3,7 +3,7 @@
 
 import { drawLogo, sized } from './ui/draw.js';
 import {
-  BANNER_TEXT, CONFIRM_TEXT, KEYS, MODE, PLACEHOLDER, RESET_DISCLAIMER, RESET_LABEL,
+  BANNER_TEXT, CONFIRM_TEXT, KEYS, MODE, PLACEHOLDER, PORTFOLIO, RESET_DISCLAIMER, RESET_LABEL,
   canArm, loadState, reduce, writeStore,
 } from './live/state.js';
 
@@ -71,7 +71,7 @@ function render() {
   orders.replaceChildren();
   const row = document.createElement('div');
   row.className = 'grow2 ghost';
-  for (const [cls, text] of [['l', '—'], ['', '—'], ['', '—'], ['s', PLACEHOLDER.orders]]) {
+  for (const [cls, text] of [['l', PLACEHOLDER.orders], ['', PLACEHOLDER.orders], ['', PLACEHOLDER.orders], ['s', PLACEHOLDER.orders]]) {
     const span = document.createElement('span');
     if (cls) span.className = cls;
     span.textContent = text;
