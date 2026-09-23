@@ -2,7 +2,7 @@
 
 ## Automated tests
 
-`node --test tests/*.test.mjs` passes all 11 tests (Node 22+):
+`node --test tests/*.test.mjs` passes all 22 tests (Node 22+):
 
 - **Bundled data:** 2 399 candles, all exactly one hour apart, every row satisfies low ≤ open/close ≤ high.
 - **Indicators:** rolling mean and breakout high are causal. A spike at bar 30 is invisible at bar 29, and the breakout high excludes the current bar.
@@ -15,6 +15,7 @@
 - **Gate:** out-of-sample return must be above 1%, drawdown under 10%, at least 3 trades, win rate at least 50%. A loss, a 10% drawdown, 2 trades, or a 49.9% win rate fails.
 - **Generation shape:** 8 genes, 4 species, 96 configs, 8 immigrants. Generation 0 has not killed anyone. The deployed leader passes the gate.
 - **Published sample:** after 50 generations, seeds 2026, 7 and 42 match the README table, and buy & hold on that window is +11.4% / 7.7% drawdown.
+- **LIVE operator state:** the panel boots disarmed and will not arm without the dry-run acknowledgement. STOP latches PANIC, keeps the first timestamp, and DISARM cannot clear it. Only CLEAR PANIC returns to DISARMED. The panic flag survives a storage round-trip and outranks a stored arm. The webhook body is exactly `{action:"STOP_LIQUIDATE_USDC", portfolio:"SETS-500"}`, and non-http(s) URLs are refused. The LIVE page is linked from the paper dashboard and the new sources contain no Coinbase credentials.
 
 ## Browser checks
 
@@ -30,5 +31,5 @@ One generation (88 new configs, each backtested on train and out-of-sample) take
 ## What is not claimed
 
 - The results table in the README comes from one 30-day out-of-sample window. It is not evidence of a durable edge, and on that window buy & hold returned more.
-- No live exchange connectivity exists or was tested. The app is paper trading on historical candles.
+- The paper dashboard has no exchange connectivity. SETS LIVE raises a local panic flag and can POST that flag to an operator webhook. It was not tested against Coinbase, and it cannot place orders.
 - Multitouch gestures on physical devices were not tested.

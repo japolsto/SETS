@@ -39,10 +39,25 @@ Every 4.8 seconds a new generation is born. Immigrants and offspring appear in t
 - Keyboard: **Space** pause, **→** step, **1–4** speed.
 - URL options: `?seed=42`, `?speed=4`, `?warm=50` (evolve 50 generations instantly on load), `?paused`.
 - Works on phones: panels stack, nothing scrolls sideways.
+- **LIVE ›** opens the operator panel for the capped SETS-500 silo. It is not part of the paper loop.
 
 <p align="center"><img src="docs/images/mobile.png" width="300" alt="SETS MACHINE on a 390 px wide phone screen"></p>
 
 Full-page screenshot: [docs/images/dashboard.png](docs/images/dashboard.png)
+
+## LIVE operator panel
+
+Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `live.html` at the site root, which forwards there) is the operator UI for a separate capped Coinbase silo:
+
+| | Paper machine | LIVE panel |
+| --- | --- | --- |
+| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows the SETS-500 silo: BTC-USD spot, max loss −$75, arm state, placeholders for cash / BTC / equity / frozen genome |
+| Orders | Simulated fills on the bundled tape | None. The page stores no Coinbase API keys and cannot cancel, sell, or convert |
+| Stop | A strategy stop inside the paper bot | A red STOP that asks “Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only?”, then latches PANIC |
+
+STOP writes a panic flag to `localStorage`. The screen shows **LIQUIDATE→USDC**. If a webhook URL is set in the field or with `?panicWebhook=`, the page also POSTs `{ "action": "STOP_LIQUIDATE_USDC", "portfolio": "SETS-500" }`. That ping is optional. Static Pages cannot place the Coinbase order. Trade Oversight / the operator executes the cancel, the sell, and the USDC convert in SETS-500 only.
+
+ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. DISARM does not clear panic. The only reset is **CLEAR PANIC (OPERATOR)**, which warns that clearing the flag does not undo a liquidation.
 
 ## Promo
 
@@ -58,7 +73,7 @@ cd SETS
 python -m http.server 8000 --directory dist
 ```
 
-Open **http://localhost:8000**. That is all: no npm install, no build step, no keys, no database. Everything runs client-side in plain ES modules. The hourly BTCUSDT tape is already in `dist/data/candles.js`.
+Open **http://localhost:8000**. The operator panel is **http://localhost:8000/live.html**. That is all: no npm install, no build step, no keys, no database. Everything runs client-side in plain ES modules. The hourly BTCUSDT tape is already in `dist/data/candles.js`.
 
 **Run the tests** (Node 18+, no dependencies):
 
@@ -129,14 +144,19 @@ Read this before getting excited:
 - Picking the leader from configs that passed the gate reuses the out-of-sample data, so its numbers are optimistic.
 - High win rates come from wide stops that were never hit in this window. That is exactly the risk a grid carries.
 
-SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money.
+SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money. The [LIVE operator panel](#live-operator-panel) is a switch for a separate capped silo. It still has no API keys and cannot send orders.
 
 ## Under the hood
 
 ```text
 index.html            Redirects to dist/ (for GitHub Pages)
+live.html             Redirects to dist/live.html
 dist/
-  index.html          Dashboard shell and controls
+  index.html          Paper dashboard shell and controls. Links to LIVE
+  live.html           SETS-500 operator panel: arm state, kill bar, red STOP
+  live.js             Panic flag, confirm flow, optional webhook POST
+  live.css            LIVE layout. The red STOP stays on screen
+  live/state.js       Arm / panic state machine, no DOM and no credentials
   app.js              Controller: generation timeline, paper trading, UI state
   style.css           Responsive blue-and-white interface
   engine/
@@ -148,11 +168,11 @@ dist/
   data/candles.js     2 399 hourly BTCUSDT candles from Binance
   assets/             Fonts, logo, favicon
 tools/fetch_data.py   Refreshes dist/data/candles.js from Binance's public API
-tests/                Node test runner: data, indicators, bot mechanics, GA
+tests/                Node test runner: data, indicators, bot mechanics, GA, LIVE state
 docs/                 README images, GIFs and the promo video
 ```
 
-Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks and no external requests at runtime.
+Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. The paper dashboard makes no external requests. SETS LIVE requests nothing until an operator confirms STOP with a webhook URL filled in.
 
 ## Credits & licence
 
@@ -162,4 +182,4 @@ Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks a
 
 Code is MIT licensed, see [LICENSE](LICENSE). Test results are in [VALIDATION.md](VALIDATION.md).
 
-> **Not financial advice.** Paper trading on historical data only. No exchange connection, no keys, no real orders. Past performance, simulated or not, does not predict future results.
+> **Not financial advice.** Paper trading on historical data only. SETS LIVE does not connect to Coinbase, holds no keys, and places no orders. Past performance, simulated or not, does not predict future results.

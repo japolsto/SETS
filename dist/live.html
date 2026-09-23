@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SETS LIVE · SETS-500</title>
+<meta name="description" content="Operator panel for the capped SETS-500 Coinbase silo. Raises a panic flag only. Places no orders and stores no API keys.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="live.css">
+</head>
+<body class="live">
+<main id="app">
+
+  <header class="panel hdr">
+    <canvas id="logo" class="logo" aria-hidden="true"></canvas>
+    <div class="brand">
+      <h1>SETS <span>LIVE</span></h1>
+      <div class="sub"><b>S</b>ETS-500 · <b>B</b>TC-USD SPOT · MAX LOSS −$75 · NO KEYS</div>
+    </div>
+    <a class="btn back" href="index.html">‹ PAPER</a>
+    <div class="clock"><b id="clock">--:--:--</b><span class="pill idle" id="pill"><i></i><em id="pillText">DISARMED</em></span></div>
+  </header>
+
+  <div id="banner" class="panic-banner" hidden role="status" aria-live="assertive">
+    <div class="kicker">PANIC · SETS-500 · BTC-USD SPOT</div>
+    <div class="word" id="bannerWord">LIQUIDATE→USDC</div>
+    <p>Cancel all SETS orders and sell SETS-owned BTC to USDC in this silo only. This page raised the flag. Trade Oversight executes the Coinbase cancel, sell, and convert.</p>
+  </div>
+
+  <section class="panel status-hero" aria-labelledby="armLabel">
+    <div class="arm-readout" id="armReadout" data-mode="DISARMED">
+      <label id="armLabel">ARM STATE</label>
+      <b id="armMode" aria-live="polite">DISARMED</b>
+    </div>
+    <div class="facts">
+      <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">CAPPED SILO</span></div>
+      <div><label>PAIR</label><b>BTC-USD</b><span class="hint">SPOT</span></div>
+      <div><label>MAX LOSS</label><b class="loss">−$75</b><span class="hint">KILL</span></div>
+      <div><label>FROZEN GENOME</label><b id="genome">—</b><span class="hint" id="genomeNote">NOT FROZEN</span></div>
+    </div>
+  </section>
+
+  <section class="panel killp">
+    <div class="ph"><h2>P&amp;L VS −$75 KILL</h2><span class="r">NO LIVE MARK</span></div>
+    <div class="phs" id="killNote">PLACEHOLDER. No account feed, so the marker stays at $0. Kill is −$75.</div>
+    <canvas id="kill" role="img" aria-label="P and L against a minus 75 dollar kill. No live mark. Marker sits at zero."></canvas>
+    <div class="kill-scale"><span>$0</span><span>NO MARK</span><span class="loss">KILL −$75</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>SILO BALANCES</h2><span class="tag">PLACEHOLDER</span></div>
+    <div class="phs">WAITING ON AN OPERATOR FEED. THIS PAGE DOES NOT READ THE COINBASE ACCOUNT.</div>
+    <div class="kv4 marks">
+      <div><label>CASH</label><b id="mCash">—</b><span class="hint">USDC · PLACEHOLDER</span></div>
+      <div><label>BTC</label><b id="mBtc">—</b><span class="hint">SETS-OWNED · PLACEHOLDER</span></div>
+      <div><label>EQUITY</label><b id="mEq">—</b><span class="hint">PLACEHOLDER</span></div>
+      <div><label>P&amp;L</label><b id="mPnl">—</b><span class="hint">VS KILL −$75</span></div>
+    </div>
+  </section>
+
+  <section class="row books">
+    <div class="panel live-book">
+      <div class="ph"><h2>OPEN ORDERS</h2><span class="badge off">PLACEHOLDER</span></div>
+      <div class="phs">SETS-500 ONLY · NONE REPORTED</div>
+      <div class="gtable">
+        <div class="gth"><span>SIDE</span><span>PRICE</span><span>SIZE</span><span>STATUS</span></div>
+        <div id="orders">
+          <div class="grow2 ghost"><span class="l">—</span><span>—</span><span>—</span><span class="s">NONE REPORTED</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel live-log">
+      <div class="ph"><h2>SIGNAL / FILL LOG</h2><span class="r">OPERATOR EVENTS</span></div>
+      <div class="phs">NO FILLS REPORTED · PAPER EVOLUTION STAYS ON THE PAPER DASHBOARD</div>
+      <div id="log" class="log" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="panel ops">
+    <div class="ph"><h2>OPERATOR</h2><span class="r">BROWSER CANNOT TRADE</span></div>
+    <label class="check" for="ack">
+      <input id="ack" type="checkbox">
+      <span>Acknowledge dry run. This panel does not send Coinbase orders. Arm stays off until this is checked, and stays off during panic.</span>
+    </label>
+    <div class="op-row">
+      <button id="bArm" class="btn pri" type="button" disabled>ARM</button>
+      <button id="bDisarm" class="btn" type="button" disabled>DISARM</button>
+      <button id="bClear" class="btn warn" type="button" disabled>CLEAR PANIC (OPERATOR)</button>
+    </div>
+    <label class="hook" for="webhook">PANIC WEBHOOK
+      <input id="webhook" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://… optional · or open with ?panicWebhook=">
+    </label>
+    <p class="phs" id="hookHelp">On confirm, POST {"action":"STOP_LIQUIDATE_USDC","portfolio":"SETS-500"}. Leave blank to latch panic locally only. The endpoint must allow this page's origin.</p>
+    <p class="hook-state" id="hookState" role="status"></p>
+  </section>
+
+  <footer class="foot">
+    Paper evolution stays paper. SETS LIVE is the operator UI for the capped SETS-500 silo.
+    Static Pages cannot place Coinbase orders. When panic is raised, Trade Oversight executes cancel, sell, and the USDC convert in SETS-500 only.
+    No API keys. Not financial advice.
+  </footer>
+</main>
+
+<div class="stop-dock" role="region" aria-label="Emergency stop">
+  <button id="bStop" class="stop" type="button" aria-describedby="stopHint">STOP</button>
+  <span id="stopHint">Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only. Always visible. Asks before it latches panic.</span>
+</div>
+
+<dialog id="modal" aria-labelledby="modalTitle">
+  <form method="dialog">
+    <h2 id="modalTitle">CONFIRM STOP</h2>
+    <p id="modalBody">Cancel all SETS orders and liquidate SETS-owned BTC to USDC in SETS-500 only?</p>
+    <p id="modalWarn"></p>
+    <div class="modal-actions">
+      <button type="submit" id="modalCancel" class="btn" value="cancel">BACK</button>
+      <button type="submit" id="modalOk" class="btn stop-ok" value="ok">LIQUIDATE→USDC</button>
+    </div>
+  </form>
+</dialog>
+
+<noscript><p class="foot">SETS LIVE needs JavaScript to latch the panic flag. It still cannot place Coinbase orders.</p></noscript>
+<script type="module" src="live.js"></script>
+</body>
+</html>
