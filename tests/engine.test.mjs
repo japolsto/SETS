@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeSeries, rolling, zscore } from '../dist/engine/series.js';
-import { GridBot, backtest, signal, FEE } from '../dist/engine/bot.js';
+import { makeSeries, rolling, zscore, buyAndHold } from '../dist/engine/series.js';
+import { GridBot, backtest, signal, FEE, FAMILIES } from '../dist/engine/bot.js';
 import { Evolution, GENES, randomGenome, mutate, passesGate } from '../dist/engine/evolution.js';
 import { mulberry32 } from '../dist/engine/rng.js';
 import { CANDLES, META } from '../dist/data/candles.js';
@@ -99,4 +99,52 @@ test('leader backtest is reproducible', () => {
   const L = e.leader;
   assert.ok(L);
   assert.deepEqual(backtest(L.genome, s, e.valFrom, e.valTo), L.val);
+});
+
+test('out-of-sample gate uses the published thresholds', () => {
+  const ok = { ret: 0.010001, maxDD: 0.099, trades: 3, winRate: 0.5 };
+  assert.equal(passesGate(ok), true);
+  assert.equal(passesGate({ ...ok, ret: 0.01 }), false);       // return must be above 1%
+  assert.equal(passesGate({ ...ok, ret: -0.05 }), false);      // losing the unseen window dies
+  assert.equal(passesGate({ ...ok, maxDD: 0.1 }), false);      // 10% drawdown does not pass
+  assert.equal(passesGate({ ...ok, trades: 2 }), false);       // fewer than 3 trades
+  assert.equal(passesGate({ ...ok, winRate: 0.499 }), false);  // win rate under 50%
+});
+
+test('a generation keeps 96 configs, 8 genes, 8 immigrants and every species', () => {
+  assert.equal(GENES.length, 8);
+  assert.deepEqual(FAMILIES, ['MOMENTUM', 'MEAN REVERT', 'VOL BREAKOUT', 'RANGE GRID']);
+  const e = new Evolution(makeSeries(CANDLES), { seed: 2026 });
+  assert.equal(e.pop.length, 96);
+  assert.equal(e.last.died.length, 0); // the initial population has not been culled
+  const rep = e.step();
+  assert.equal(rep.immigrants.length, 8);
+  assert.equal(e.pop.length, 96);
+  assert.equal(rep.immigrants.length + rep.offspring.length + (96 - rep.died.length), 96);
+  for (let f = 0; f < 4; f++) assert.ok(e.pop.some((x) => x.genome.family === f), 'family ' + f);
+  assert.ok(!e.leader || passesGate(e.leader.val));
+  const bestTrain = e.pop[0];
+  if (!bestTrain.pass) assert.ok(!e.leader || e.leader.id !== bestTrain.id);
+});
+
+test('published 50-generation sample matches the honest-results table', () => {
+  const s = makeSeries(CANDLES);
+  const pct1 = (x) => Number((x * 100).toFixed(1));
+  const bh = buyAndHold(s, Math.floor(s.n * 0.7), s.n);
+  assert.equal(pct1(bh.ret), 11.4);
+  assert.equal(pct1(bh.maxDD), 7.7);
+  const expect = {
+    2026: { fam: 'RANGE GRID', train: [28.8, 4.5], oos: [8.4, 5.3], trades: 5 },
+    7: { fam: 'VOL BREAKOUT', train: [28.6, 4.3], oos: [8.3, 7.7], trades: 4 },
+    42: { fam: 'MEAN REVERT', train: [30.8, 2.9], oos: [7.3, 3.9], trades: 54 },
+  };
+  for (const [seed, want] of Object.entries(expect)) {
+    const e = new Evolution(s, { seed: Number(seed) });
+    for (let k = 0; k < 50; k++) e.step();
+    const L = e.leader;
+    assert.ok(L && passesGate(L.val), 'seed ' + seed);
+    assert.equal(FAMILIES[L.genome.family], want.fam, 'seed ' + seed);
+    assert.deepEqual([pct1(L.train.ret), pct1(L.train.maxDD)], want.train, 'train ' + seed);
+    assert.deepEqual([pct1(L.val.ret), pct1(L.val.maxDD), L.val.trades], [...want.oos, want.trades], 'oos ' + seed);
+  }
 });

@@ -47,6 +47,20 @@ export function zscore(s, L, j) {
   return sd > 0 ? (s.close[j] - r.mean[j]) / sd : 0;
 }
 
+// Buy-and-hold from the open of `from` to the close of `to - 1`.
+// Drawdown is the worst close-to-close drop from the running peak, peak seeded at the entry.
+export function buyAndHold(s, from, to) {
+  const entry = s.open[from];
+  let peak = entry, maxDD = 0;
+  for (let i = from; i < to; i++) {
+    const px = s.close[i];
+    if (px > peak) peak = px;
+    const dd = 1 - px / peak;
+    if (dd > maxDD) maxDD = dd;
+  }
+  return { ret: s.close[to - 1] / entry - 1, maxDD };
+}
+
 // Realised volatility of hourly log returns over the last `w` bars ending at j.
 export function volatility(s, j, w = 24) {
   let a = 0, b = 0, k = 0;

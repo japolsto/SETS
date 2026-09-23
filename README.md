@@ -53,14 +53,12 @@ Full-page screenshot: [docs/images/dashboard.png](docs/images/dashboard.png)
 Requires Python 3 (to serve the files) and any modern browser.
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/sets-machine.git
-cd sets-machine
+git clone https://github.com/japolsto/SETS.git
+cd SETS
 python -m http.server 8000 --directory dist
 ```
 
-Open **http://localhost:8000**. That is all: no npm install, no build step, no keys, no database. Everything runs client-side in plain ES modules.
-
-**Host it for free on GitHub Pages:** Settings → Pages → *Deploy from a branch* → `main` / `(root)`. The root `index.html` forwards visitors to `dist/`.
+Open **http://localhost:8000**. That is all: no npm install, no build step, no keys, no database. Everything runs client-side in plain ES modules. The hourly BTCUSDT tape is already in `dist/data/candles.js`.
 
 **Run the tests** (Node 18+, no dependencies):
 
@@ -68,11 +66,13 @@ Open **http://localhost:8000**. That is all: no npm install, no build step, no k
 node --test tests/*.test.mjs
 ```
 
-**Refresh the market data** from Binance's public API (standard library only, no key):
+**Refresh the market data** from Binance's public API (standard library only, no key). This replaces the bundled tape, so the published-sample test will no longer match the table below until you update that table:
 
 ```bash
 python tools/fetch_data.py --hours 2400
 ```
+
+**Host it for free on GitHub Pages:** Settings → Pages → *Deploy from a branch* → `main` / `(root)`. The root `index.html` forwards visitors to `dist/`.
 
 ## How it works
 
@@ -100,7 +100,7 @@ Each strategy is a long-only grid-DCA bot described by 8 genes:
 | **Mutate** | Tournament selection inside each species, uniform crossover, Gaussian mutation (p = 0.18) |
 | **Backtest** | Every newcomer is backtested on train (70%) and out-of-sample (30%) |
 | **Select** | Keep the top 4 overall plus the best of each species; everyone else dies |
-| **Deploy** | Best train fitness among configs that pass the gate becomes the paper-trading leader |
+| **Deploy** | Best train fitness among configs that pass the gate becomes the paper-trading leader. The Kelly panel shows the optimal bet fraction; the paper grid stakes the full paper bankroll, so the fills match the backtest that was scored |
 
 **Fitness:** `train return − 0.6 × max drawdown`, with a penalty below 4 trades.
 **Gate:** out-of-sample return > 1%, drawdown < 10%, at least 3 trades, win rate ≥ 50%.
@@ -110,7 +110,7 @@ Each strategy is a long-only grid-DCA bot described by 8 genes:
 - Signals are computed on the **close of bar j** and executed at the **open of bar j + 1**. A test proves that changing a future candle cannot change a past signal.
 - Inside a bar, fills are processed **adverse-first**: grid fills, then stop, then take-profit.
 - Every fill and exit pays a **0.04%** fee. Open positions are marked out at the end of a test window.
-- The paper-trading panel replays the out-of-sample candles with the **same `GridBot` class** that the backtests use, so what you see is what was scored.
+- The paper-trading panel replays the out-of-sample candles with the **same `GridBot` class** that the backtests use, starting on the **first out-of-sample bar**, so what you see is what was scored. The chart also prints buy & hold over that same window.
 
 ## Honest results
 

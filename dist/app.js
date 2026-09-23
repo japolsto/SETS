@@ -2,7 +2,7 @@
 // and paper-trades the current leader on the out-of-sample part of the tape.
 
 import { CANDLES, META } from './data/candles.js';
-import { makeSeries, volatility } from './engine/series.js';
+import { makeSeries, volatility, buyAndHold } from './engine/series.js';
 import { GridBot, signal, FAMILIES } from './engine/bot.js';
 import { Evolution, GENES } from './engine/evolution.js';
 import * as D from './ui/draw.js';
@@ -32,7 +32,9 @@ function restart(seed, warm = 0) {
     seed, evo, ct: CYCLE * 0.999, t: 0, rep: evo.last,
     nodes: new Map(), edges: [], lineage: [],
     shown: null, pending: null, geneFlash: null,
-    paper: { bot: null, i: evo.valFrom + 24, frac: 0, realized: 0, queued: null },
+    // Same slice the gate scored: first out-of-sample bar through the end of the tape.
+    paper: { bot: null, i: evo.valFrom, frac: 0, realized: 0, queued: null },
+    bench: buyAndHold(S, evo.valFrom, evo.valTo),
     log: [], marks: [], inspect: null, hover: null, P: new Map(),
   };
   evo.pop.forEach((ind) => addNode(ind, -1));
@@ -137,7 +139,7 @@ function advancePaper(dt) {
     p.i++;
     if (p.i >= evo.valTo) {
       if (p.bot && p.bot.inPos) { const cost = p.bot.cost; p.bot.flatten(S, evo.valTo - 1); const tr = p.bot.trades[p.bot.trades.length - 1]; p.realized += tr.pnl; pushLog('EOD', 'bad', `tape end · flattened $${fmt(cost)} · ${tr.pnl >= 0 ? '+' : '−'}$${Math.abs(tr.pnl).toFixed(2)}`, evo.valTo - 1); }
-      p.i = evo.valFrom + 24; st.marks = [];
+      p.i = evo.valFrom; st.marks = [];
       pushLog('REWIND', 'ev', 'out-of-sample tape restarts', p.i);
     }
   }
@@ -298,6 +300,7 @@ function renderTrade() {
   const o = S.open[i], c = price;
   setHTML($('ohlc'), `<em>${tapeTime(S.time[i])} UTC</em>  <em>O</em>${money(o)}  <em>C</em>${money(c)}  <em>Δ</em>${pct(c / o - 1, 2)}  <em>VOL</em>${fmt(S.volume[i] * p.frac)} BTC`);
   setText($('chSym'), META.symbol);
+  setText($('chBench'), `BUY & HOLD · SAME OUT-OF-SAMPLE WINDOW ${pct(st.bench.ret)} · DD ${(st.bench.maxDD * 100).toFixed(1)}%`);
   if (!bot) { setText($('chCfg'), 'NO LEADER YET'); setText($('chState'), 'FLAT'); }
   else {
     setText($('chCfg'), `LEADER g${st.shown ? st.shown.id : '?'} · ${FAMILIES[g.family]} · ${g.levels} LEVELS · ${(g.spacing * 100).toFixed(2)}% SPACING · TP ${(g.tp * 100).toFixed(2)}%`);
@@ -357,7 +360,10 @@ function setSpeed(v) { speed = v; document.querySelectorAll('[data-speed]').forE
 function step() {
   if (!st.deployed) deploy();
   startGeneration();
-  st.ct = CYCLE * 0.999;
+  // Land on DEPLOY for this generation. CYCLE * 0.999 sits ~5 ms before the next
+  // birth, which is less than one frame, so a running clock would immediately
+  // start a second generation. A full stage of room (0.8 s) keeps one click = one gen.
+  st.ct = STAGE * 5;
   deploy();
 }
 

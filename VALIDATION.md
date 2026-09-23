@@ -2,7 +2,7 @@
 
 ## Automated tests
 
-`node --test tests/*.test.mjs` passes all 8 tests (Node 24):
+`node --test tests/*.test.mjs` passes all 11 tests (Node 22+):
 
 - **Bundled data:** 2 399 candles, all exactly one hour apart, every row satisfies low ≤ open/close ≤ high.
 - **Indicators:** rolling mean and breakout high are causal. A spike at bar 30 is invisible at bar 29, and the breakout high excludes the current bar.
@@ -12,6 +12,9 @@
 - **Genome bounds:** 500 heavy mutations never leave a gene's range; integer genes stay integers.
 - **Determinism:** two runs with the same seed produce identical histories. All four species survive 12 generations, and best fitness never decreases.
 - **Reproducibility:** re-running the leader's backtest gives exactly the stored out-of-sample metrics.
+- **Gate:** out-of-sample return must be above 1%, drawdown under 10%, at least 3 trades, win rate at least 50%. A loss, a 10% drawdown, 2 trades, or a 49.9% win rate fails.
+- **Generation shape:** 8 genes, 4 species, 96 configs, 8 immigrants. Generation 0 has not killed anyone. The deployed leader passes the gate.
+- **Published sample:** after 50 generations, seeds 2026, 7 and 42 match the README table, and buy & hold on that window is +11.4% / 7.7% drawdown.
 
 ## Browser checks
 
