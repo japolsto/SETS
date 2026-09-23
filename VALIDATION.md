@@ -23,6 +23,8 @@
 - Desktop, 1280 × 900: all panels render. Evolution, paper trading, inspect-on-click (node g12 → "GENOME · INSPECTING"), pause, step and speed were exercised. No console errors.
 - Phone, 390 × 844: panels stack and `scrollWidth` equals the viewport (390 px), so nothing scrolls sideways.
 - The README screenshots and GIFs were captured from the running app (seed 2026, 40 generations warmed up) with headless Chrome. No page errors were reported during capture.
+- SETS LIVE, desktop 1280 × 900: the panel boots DISARMED and ARM stays disabled until the dry-run box is checked. STOP opens a confirm dialog with the SETS-500 liquidation sentence. Confirming shows the LIQUIDATE→USDC banner, sets the arm state to PANIC, and stores `sets.live.panic=1`. ARM and DISARM stay disabled. No console errors. The paper dashboard still renders and its LIVE link returns to the panel.
+- SETS LIVE, 390 × 844: `scrollWidth` equals the viewport (390 px) and the red STOP stays inside the viewport.
 
 ## Performance
 
