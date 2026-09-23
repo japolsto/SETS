@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  CONNECTED_BANNER, CONFIRM_TEXT, FORBIDDEN_PORTFOLIO_ID, KEYS, LEGACY_WEBHOOK_KEY, MODE,
-  OFFLINE_BANNER, PLACEHOLDER, PORTFOLIO_ID, RESET_DISCLAIMER, RESET_LABEL, STOP_SENT,
+  CONNECTED_BANNER, CONFIRM_TEXT, FORBIDDEN_PORTFOLIO_ID, KEYS, LEGACY_WEBHOOK_KEY, LIVE_MONITOR_BANNER, MODE,
+  OFFLINE_BANNER, PLACEHOLDER, PORTFOLIO_ID, RESET_DISCLAIMER, RESET_LABEL, STATUS_SCHEMA, STOP_SENT,
   THRESHOLD_COPY, UNKNOWN,
   canArm, deliverStop, formatUsd, isHttpsUrl, killFraction, loadSettings, loadState,
   parseStatus, reduce, saveSettings, shouldDrawMark, stopRequest, webhookReady, writeStore,
@@ -131,6 +131,24 @@ test('balances stay UNKNOWN when there is no status feed', () => {
   assert.equal(good.snapshot.pnl, -3.5);
   assert.equal(formatUsd(good.snapshot.pnl), '−$3.50');
   assert.equal(shouldDrawMark(good.snapshot.pnl), true);
+  const published = parseStatus(JSON.parse(readFileSync(new URL('../dist/status.json', import.meta.url), 'utf8')));
+  assert.equal(published.ok, true);
+  assert.equal(published.snapshot.strategy, 'DISARMED');
+  assert.equal(published.snapshot.cash, 495.33);
+  assert.equal(published.snapshot.btc, 0);
+  assert.equal(published.snapshot.equity, 495.33);
+  assert.equal(published.snapshot.pnl, null);
+  assert.equal(published.snapshot.mid, 84454.17);
+  assert.equal(shouldDrawMark(published.snapshot.pnl), false);
+  const armedFeed = parseStatus({
+    schema: STATUS_SCHEMA,
+    portfolio: { name: 'SETS-500', uuid: PORTFOLIO_ID },
+    strategy: 'ARMED',
+    balances: { cash_usd: 1, btc: 0, equity_usd: 1 },
+  });
+  assert.equal(armedFeed.ok, true);
+  assert.equal(armedFeed.snapshot.strategy, 'DISARMED');
+  assert.equal(canArm(), false);
 });
 
 test('a failed webhook is not marked sent, and acknowledging the latch does not claim exposure is resolved', () => {
@@ -169,7 +187,8 @@ test('kill fraction stays empty without a reading and reaches the threshold only
   assert.equal(STOP_SENT, 'STOP sent — await Trade Oversight confirmation');
   assert.equal(RESET_LABEL, 'ACKNOWLEDGE LATCH');
   assert.match(RESET_DISCLAIMER, /no claim that orders or exposure are resolved/i);
-  assert.equal(CONNECTED_BANNER, 'LIVE · STOP WIRED · STRATEGY DISARMED');
+  assert.equal(LIVE_MONITOR_BANNER, 'LIVE MONITOR · COINBASE READ · STRATEGY DISARMED');
+  assert.equal(CONNECTED_BANNER, LIVE_MONITOR_BANNER);
   assert.equal(OFFLINE_BANNER, 'NOT CONNECTED');
   assert.equal(THRESHOLD_COPY, 'Loss intervention threshold -$75; losses may exceed this.');
 });
@@ -186,7 +205,10 @@ test('live page wires STOP to saved settings and leaves ARM off', () => {
   assert.ok(html.includes('ACKNOWLEDGE LATCH'));
   assert.ok(html.includes('id="bStop"'));
   assert.ok(html.includes('disabled'));
-  assert.ok(stateSrc.includes(CONNECTED_BANNER));
+  assert.ok(stateSrc.includes(LIVE_MONITOR_BANNER));
+  assert.ok(stateSrc.includes(STATUS_SCHEMA));
+  assert.match(page, /STATUS_FILE/);
+  assert.match(stateSrc, /status\.json/);
   assert.match(index, /href="live\.html"/);
   assert.match(html, /SETS-500 STOP liquidate/);
   assert.doesNotMatch(html, /\$0/);

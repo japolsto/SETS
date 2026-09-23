@@ -43,7 +43,7 @@
     <div>
       <div class="facts">
         <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">04309540-7942-460f-8509-151565372f5b</span></div>
-        <div><label>PAIR</label><b>BTC-USD</b><span class="hint">SPOT</span></div>
+        <div><label>PAIR</label><b>BTC-USD</b><span class="hint" id="mMid">MID UNKNOWN</span></div>
         <div><label>FROZEN GENOME</label><b id="genome">UNKNOWN</b><span class="hint" id="genomeNote">UNAVAILABLE</span></div>
       </div>
       <p class="threshold" id="threshold">Loss intervention threshold -$75; losses may exceed this.</p>
@@ -59,7 +59,7 @@
 
   <section class="panel">
     <div class="ph"><h2>SILO BALANCES</h2><span class="tag" id="balanceTag">UNKNOWN</span></div>
-    <div class="phs" id="asOf">Account fields stay UNKNOWN until a status URL answers. This page does not call Coinbase.</div>
+    <div class="phs" id="asOf">Waiting for status.json. This page does not call Coinbase.</div>
     <div class="kv4 marks">
       <div><label>CASH</label><b id="mCash">UNKNOWN</b><span class="hint">USDC</span></div>
       <div><label>BTC</label><b id="mBtc">UNKNOWN</b><span class="hint">SETS-OWNED</span></div>
@@ -115,7 +115,7 @@
       <div class="demo-note">
         <label>HOW THE WEBHOOK IS SENT</label>
         <p>Open the Trade Oversight routine named “SETS-500 STOP liquidate”, copy its webhook URL and sender key, paste them here, and save. They stay in this browser’s local storage. They are not committed, and <span class="mono">?panicWebhook=</span> or <span class="mono">?panic=</span> cannot change them.</p>
-        <p>STOP posts JSON <span class="mono">action</span>, <span class="mono">portfolio</span> SETS-500, <span class="mono">portfolio_id</span> 04309540-7942-460f-8509-151565372f5b, <span class="mono">ts</span>, and <span class="mono">key</span>. The same sender key is also sent as <span class="mono">Authorization: Bearer</span> and <span class="mono">X-Webhook-Key</span>. The default portfolio fec63e7b-dccd-5b1f-9ae1-0700e22e92db is refused.</p>
+        <p>The page polls <span class="mono">status.json</span> (schema sets-live-status/v1) and an optional https status URL. Trade Oversight refreshes that snapshot. STOP is the only write: JSON <span class="mono">action</span>, <span class="mono">portfolio</span> SETS-500, <span class="mono">portfolio_id</span> 04309540-7942-460f-8509-151565372f5b, <span class="mono">ts</span>, and <span class="mono">key</span>, plus <span class="mono">Authorization: Bearer</span> and <span class="mono">X-Webhook-Key</span>. The default portfolio fec63e7b-dccd-5b1f-9ae1-0700e22e92db is refused. Strategy ARM stays off.</p>
       </div>
     </form>
   </section>

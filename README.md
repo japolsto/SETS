@@ -55,7 +55,7 @@ Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `
 | Orders | Simulated fills on the bundled tape | No strategy orders. ARM cannot be turned on |
 | Stop | A strategy stop inside the paper bot | Red STOP posts to the webhook saved in this browser |
 
-Until that webhook is saved, the banner reads **NOT CONNECTED** and STOP is disabled. After you save it, the banner reads **LIVE · STOP WIRED · STRATEGY DISARMED**. `?panicWebhook=` and `?panic=` are ignored. The default portfolio `fec63e7b-dccd-5b1f-9ae1-0700e22e92db` is refused in the webhook URL, the sender key, and any status JSON.
+The page polls `dist/status.json` (schema `sets-live-status/v1`). When that snapshot loads, the banner reads **LIVE MONITOR · COINBASE READ · STRATEGY DISARMED**. The numbers are the published snapshot. This page does not call Coinbase. Until a snapshot loads, the banner stays **NOT CONNECTED**. STOP stays disabled until you save a webhook, and `?panicWebhook=` and `?panic=` are ignored. The default portfolio `fec63e7b-dccd-5b1f-9ae1-0700e22e92db` is refused in the webhook URL, the sender key, and any status JSON.
 
 ### Paste the STOP webhook
 
@@ -80,20 +80,24 @@ A successful post latches the panel and shows **STOP sent — await Trade Oversi
 
 ### Status feed
 
-Balances are **UNKNOWN** until you optionally save an https status URL. The page polls that URL about every 15 seconds and does not call Coinbase itself. If the URL is unset or the fetch fails, cash, BTC, equity, P&L, and orders stay UNKNOWN and the P&L scale draws no marker. A real reading may draw a marker. The JSON shape is:
+The monitor polls `status.json` next to `live.html` about every 15 seconds, then an optional https status URL if you save one. Trade Oversight refreshes `dist/status.json` to publish a new Coinbase read. The starter file is the 2026-09-23T21:48Z snapshot: cash $495.33, BTC 0, equity $495.33, BTC-USD mid $84,454.17. P&L is omitted there, so the scale draws no marker. A failed or refused feed returns the fields to **UNKNOWN**. The page never creates a strategy order from this file.
 
 ```json
 {
-  "portfolio": "SETS-500",
-  "portfolio_id": "04309540-7942-460f-8509-151565372f5b",
-  "updated_at": "2026-09-23T19:00:00.000Z",
-  "cash_usd": 100.5,
-  "btc": 0.001,
-  "equity_usd": 175.2,
-  "pnl_usd": -12.4,
-  "orders": [{ "side": "BUY", "price": "100000", "size": "0.001", "status": "OPEN" }]
+  "schema": "sets-live-status/v1",
+  "updated_at": "2026-09-23T21:48:00.000Z",
+  "portfolio": {
+    "name": "SETS-500",
+    "uuid": "04309540-7942-460f-8509-151565372f5b"
+  },
+  "strategy": "DISARMED",
+  "market": { "pair": "BTC-USD", "mid": 84454.17 },
+  "balances": { "cash_usd": 495.33, "btc": 0, "equity_usd": 495.33, "pnl_usd": null },
+  "genome": { "label": "UNAVAILABLE" }
 }
 ```
+
+The published panel is [https://japolsto.github.io/SETS/dist/live.html](https://japolsto.github.io/SETS/dist/live.html). [https://japolsto.github.io/SETS/live.html](https://japolsto.github.io/SETS/live.html) forwards there.
 
 The threshold line stays: “Loss intervention threshold -$75; losses may exceed this.”
 

@@ -3,7 +3,7 @@
 
 import { drawLogo, sized } from './ui/draw.js';
 import {
-  CONNECTED_BANNER, CONFIRM_TEXT, KEYS, MODE, OFFLINE_BANNER, PLACEHOLDER, PORTFOLIO, PORTFOLIO_ID,
+  CONNECTED_BANNER, CONFIRM_TEXT, KEYS, LIVE_MONITOR_BANNER, MODE, OFFLINE_BANNER, PLACEHOLDER, PORTFOLIO, PORTFOLIO_ID, STATUS_FILE,
   RESET_DISCLAIMER, RESET_LABEL, STOP_SENT,
   canArm, formatBtc, formatUsd, isHttpsUrl, killFraction, loadState, parseStatus, reduce,
   saveSettings, shouldDrawMark, stopRequest, webhookReady, writeStore,
@@ -51,6 +51,7 @@ function money(n) {
 function render() {
   const panic = state.stopSent;
   const wired = webhookReady(state.settings);
+  const live = !!state.balances.live;
   document.body.classList.toggle('is-panic', panic);
 
   const readout = $('armReadout');
@@ -61,13 +62,14 @@ function render() {
   pill.classList.toggle('panic', panic);
   pill.classList.toggle('idle', !panic);
 
-  $('connA').textContent = wired ? 'LIVE' : OFFLINE_BANNER;
-  $('connB').textContent = wired ? 'STOP WIRED' : 'STOP OFF';
+  $('connA').textContent = live ? 'LIVE MONITOR' : OFFLINE_BANNER;
+  $('connB').textContent = live ? 'COINBASE READ' : (wired ? 'STOP WIRED' : 'STOP OFF');
   $('connC').textContent = 'STRATEGY DISARMED';
-  $('connText').textContent = wired
-    ? CONNECTED_BANNER + '. STOP posts to the saved webhook for ' + PORTFOLIO + ' only. Balances stay UNKNOWN until the status URL answers. Strategy ARM stays off.'
-    : 'NOT CONNECTED. Paste the Trade Oversight webhook and sender key, then save. STOP does not send until then. Strategy ARM stays off.';
-  $('subLine').textContent = (wired ? CONNECTED_BANNER : OFFLINE_BANNER + ' · STOP OFF · STRATEGY DISARMED')
+  $('connText').textContent = live
+    ? LIVE_MONITOR_BANNER + '. Numbers come from the status snapshot for ' + PORTFOLIO + ' only. This page does not call Coinbase and does not create strategy orders. '
+      + (wired ? 'STOP is wired to the saved webhook.' : 'STOP stays off until you save a webhook.')
+    : 'NOT CONNECTED. The page is waiting for ' + STATUS_FILE + '. Strategy ARM stays off. STOP does not send until a webhook is saved.';
+  $('subLine').textContent = (live ? LIVE_MONITOR_BANNER : OFFLINE_BANNER + ' · STOP OFF · STRATEGY DISARMED')
     + ' · ' + PORTFOLIO + ' · BTC-USD SPOT';
 
   $('banner').hidden = !panic;
@@ -77,14 +79,17 @@ function render() {
   const bal = state.balances;
   $('genome').textContent = bal.genome || PLACEHOLDER.genome;
   $('genomeNote').textContent = bal.genome ? 'STATUS FEED' : PLACEHOLDER.genomeNote;
+  $('mMid').textContent = Number.isFinite(bal.mid) ? 'MID ' + money(bal.mid) : 'MID UNKNOWN';
   $('mCash').textContent = money(bal.cash);
   $('mBtc').textContent = Number.isFinite(bal.btc) ? formatBtc(bal.btc) : PLACEHOLDER.btc;
   $('mEq').textContent = money(bal.equity);
   $('mPnl').textContent = money(bal.pnl);
-  $('balanceTag').textContent = state.settings.statusUrl ? (bal.error ? 'STATUS FAILED' : (bal.updatedAt || bal.cash != null ? 'STATUS FEED' : 'WAITING')) : 'UNKNOWN';
+  $('balanceTag').textContent = bal.error ? 'STATUS FAILED' : (live ? 'COINBASE READ' : 'UNKNOWN');
   $('asOf').textContent = bal.error
     ? bal.error + ' Balances are UNKNOWN.'
-    : (bal.updatedAt ? 'Status updated ' + bal.updatedAt + '.' : 'Account fields stay UNKNOWN until a status URL answers. This page does not call Coinbase.');
+    : (live
+      ? 'Status snapshot ' + (bal.updatedAt || 'without a timestamp') + '. Trade Oversight refreshes ' + STATUS_FILE + '. This page does not call Coinbase and does not create orders.'
+      : 'Waiting for ' + STATUS_FILE + '. This page does not call Coinbase.');
 
   const marked = shouldDrawMark(bal.pnl);
   $('killHead').textContent = marked ? money(bal.pnl) : 'UNKNOWN';
@@ -248,35 +253,33 @@ function saveFromForm() {
   pollStatus();
 }
 
-function balancesUnknown(bal) {
-  return !bal.updatedAt && !bal.error && bal.cash == null && bal.btc == null && bal.equity == null && bal.pnl == null && !bal.genome && !bal.orders;
-}
+let pollGen = 0;
 
 async function pollStatus() {
-  const url = state.settings.statusUrl;
-  if (!url || !isHttpsUrl(url)) {
-    if (!balancesUnknown(state.balances)) {
-      commit(reduce(state, { type: 'status', ok: false, error: '' }, new Date().toISOString()));
-    }
-    return;
-  }
-  try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (state.settings.statusUrl !== url) return;
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    if (state.settings.statusUrl !== url) return;
-    const parsed = parseStatus(json);
-    if (!parsed.ok) {
-      commit(reduce(state, { type: 'status', ok: false, error: 'Status feed refused (' + parsed.reason + ').' }, new Date().toISOString()));
+  const gen = ++pollGen;
+  const custom = state.settings.statusUrl;
+  const local = new URL(STATUS_FILE, document.baseURI).href;
+  const urls = [];
+  if (custom && isHttpsUrl(custom)) urls.push(custom);
+  if (!urls.includes(local)) urls.push(local);
+  let last = 'Status feed unavailable.';
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+      if (gen !== pollGen) return;
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      if (gen !== pollGen) return;
+      const parsed = parseStatus(json);
+      if (!parsed.ok) throw new Error(parsed.reason);
+      commit(reduce(state, { type: 'status', ok: true, snapshot: parsed.snapshot }, new Date().toISOString()));
       return;
+    } catch (err) {
+      last = err && err.message ? err.message : 'failed';
     }
-    commit(reduce(state, { type: 'status', ok: true, snapshot: parsed.snapshot }, new Date().toISOString()));
-  } catch (err) {
-    if (state.settings.statusUrl !== url) return;
-    const message = err && err.message ? err.message : 'failed';
-    commit(reduce(state, { type: 'status', ok: false, error: 'Status feed failed (' + message + ').' }, new Date().toISOString()));
   }
+  if (gen !== pollGen) return;
+  commit(reduce(state, { type: 'status', ok: false, error: 'Status feed failed (' + last + ').' }, new Date().toISOString()));
 }
 
 $('bStop').addEventListener('click', () => openModal('stop'));
@@ -318,6 +321,7 @@ window.SETS_LIVE = {
   PLACEHOLDER,
   CONFIRM_TEXT,
   CONNECTED_BANNER,
+  LIVE_MONITOR_BANNER,
   OFFLINE_BANNER,
   STOP_SENT,
   PORTFOLIO_ID,

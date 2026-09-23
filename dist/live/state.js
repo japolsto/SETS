@@ -9,8 +9,11 @@ export const PAIR = 'BTC-USD';
 export const MARKET = 'SPOT';
 export const MAX_LOSS_USD = 75;
 export const THRESHOLD_COPY = 'Loss intervention threshold -$75; losses may exceed this.';
-export const CONNECTED_BANNER = 'LIVE · STOP WIRED · STRATEGY DISARMED';
+export const LIVE_MONITOR_BANNER = 'LIVE MONITOR · COINBASE READ · STRATEGY DISARMED';
+export const CONNECTED_BANNER = LIVE_MONITOR_BANNER;
 export const OFFLINE_BANNER = 'NOT CONNECTED';
+export const STATUS_SCHEMA = 'sets-live-status/v1';
+export const STATUS_FILE = 'status.json';
 export const CONFIRM_TEXT = 'Send STOP for SETS-500 to the saved Trade Oversight webhook?';
 export const STOP_SENT = 'STOP sent — await Trade Oversight confirmation';
 export const RESET_LABEL = 'ACKNOWLEDGE LATCH';
@@ -138,12 +141,29 @@ function num(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function portfolioIdOf(json) {
+  if (json.portfolio && typeof json.portfolio === 'object') return json.portfolio.uuid || json.portfolio.id || '';
+  return json.portfolio_id || json.portfolioId || '';
+}
+
+function portfolioNameOf(json) {
+  if (json.portfolio && typeof json.portfolio === 'object') return json.portfolio.name || '';
+  if (typeof json.portfolio === 'string') return json.portfolio;
+  return '';
+}
+
 export function parseStatus(json) {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return { ok: false, reason: 'invalid' };
   if (containsForbidden(JSON.stringify(json))) return { ok: false, reason: 'forbidden-portfolio' };
-  const id = json.portfolio_id || json.portfolioId || '';
+  if (json.schema && json.schema !== STATUS_SCHEMA) return { ok: false, reason: 'schema' };
+  const id = portfolioIdOf(json);
+  if (json.schema === STATUS_SCHEMA && id !== PORTFOLIO_ID) return { ok: false, reason: 'wrong-portfolio' };
   if (id && id !== PORTFOLIO_ID) return { ok: false, reason: 'wrong-portfolio' };
-  if (json.portfolio && json.portfolio !== PORTFOLIO) return { ok: false, reason: 'wrong-portfolio' };
+  const name = portfolioNameOf(json);
+  if (name && name !== PORTFOLIO) return { ok: false, reason: 'wrong-portfolio' };
+  const bal = json.balances && typeof json.balances === 'object' ? json.balances : json;
+  const market = json.market && typeof json.market === 'object' ? json.market : {};
+  const genome = json.genome && typeof json.genome === 'object' ? json.genome.label : json.genome_id;
   const orders = Array.isArray(json.orders) ? json.orders.slice(0, 8).map((row) => ({
     side: row && row.side ? String(row.side) : UNKNOWN,
     price: row && row.price != null ? String(row.price) : UNKNOWN,
@@ -153,13 +173,16 @@ export function parseStatus(json) {
   return {
     ok: true,
     snapshot: {
-      cash: num(json.cash_usd != null ? json.cash_usd : json.cash),
-      btc: num(json.btc),
-      equity: num(json.equity_usd != null ? json.equity_usd : json.equity),
-      pnl: num(json.pnl_usd != null ? json.pnl_usd : json.pnl),
-      genome: json.genome_id ? String(json.genome_id) : null,
+      cash: num(bal.cash_usd != null ? bal.cash_usd : bal.cash),
+      btc: num(bal.btc),
+      equity: num(bal.equity_usd != null ? bal.equity_usd : bal.equity),
+      pnl: num(bal.pnl_usd != null ? bal.pnl_usd : bal.pnl),
+      mid: num(market.mid != null ? market.mid : json.mid),
+      genome: genome ? String(genome) : null,
       orders,
-      updatedAt: json.updated_at ? String(json.updated_at) : null,
+      updatedAt: json.updated_at ? String(json.updated_at) : (json.as_of ? String(json.as_of) : null),
+      strategy: 'DISARMED',
+      live: true,
     },
   };
 }
@@ -260,7 +283,7 @@ export function loadState(storage, search, now) {
     stopSent: saved.stopSent,
     panicAt: saved.panicAt,
     settings,
-    balances: { cash: null, btc: null, equity: null, pnl: null, genome: null, orders: null, updatedAt: null, error: '' },
+    balances: { cash: null, btc: null, equity: null, pnl: null, mid: null, genome: null, orders: null, updatedAt: null, strategy: 'DISARMED', live: false, error: '' },
     log,
   };
 }
@@ -299,7 +322,7 @@ export function reduce(state, action, now = null) {
       if (!action.ok) {
         return {
           ...state,
-          balances: { cash: null, btc: null, equity: null, pnl: null, genome: null, orders: null, updatedAt: null, error: action.error == null ? 'Status feed unavailable.' : action.error },
+          balances: { cash: null, btc: null, equity: null, pnl: null, mid: null, genome: null, orders: null, updatedAt: null, strategy: 'DISARMED', live: false, error: action.error == null ? 'Status feed unavailable.' : action.error },
         };
       }
       return { ...state, balances: { ...action.snapshot, error: '' } };
