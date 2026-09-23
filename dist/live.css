@@ -115,6 +115,10 @@ label.check input { width: 18px; height: 18px; margin-top: 1px; flex: none; acce
 .btn.warn:disabled, .btn.warn:disabled:hover { color: var(--mute); border-color: var(--line); background: var(--faint); }
 .btn.on { background: var(--pale); color: var(--royal); border-color: var(--royal); }
 
+.settings { margin-top: 16px; }
+.settings label.hook { display: block; }
+.settings .opt { color: var(--ink-soft); letter-spacing: .08em; }
+.settings .err { color: var(--red); min-height: 1.2em; }
 label.hook { margin-top: 14px; }
 label.hook input {
   display: block;
@@ -165,6 +169,8 @@ label.hook input:focus-visible { outline: 2px solid var(--royal); outline-offset
   letter-spacing: .12em;
 }
 .stop:hover { background: #b91c1c; }
+.stop:disabled,
+.stop:disabled:hover { background: #9ca3af; cursor: not-allowed; transform: none; }
 .stop:focus-visible { outline: 3px solid #7f1d1d; outline-offset: 3px; }
 .stop[aria-pressed="true"] { background: #991b1b; }
 #stopHint { color: var(--ink); font-size: 11px; letter-spacing: .03em; line-height: 1.45; }

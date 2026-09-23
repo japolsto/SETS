@@ -1,16 +1,19 @@
-// SETS LIVE demonstration state. This module never talks to an exchange,
-// never holds credentials, and never chooses a STOP destination.
-// Panic is a local flag. Liquidation is not wired.
+// SETS LIVE operator state.
+// STOP can post only to a webhook saved in this browser. Query strings are ignored.
+// Strategy ARM is not implemented. This module never holds Coinbase API keys.
 
 export const PORTFOLIO = 'SETS-500';
+export const PORTFOLIO_ID = '04309540-7942-460f-8509-151565372f5b';
+export const FORBIDDEN_PORTFOLIO_ID = 'fec63e7b-dccd-5b1f-9ae1-0700e22e92db';
 export const PAIR = 'BTC-USD';
 export const MARKET = 'SPOT';
 export const MAX_LOSS_USD = 75;
-export const DEMO_LABEL = 'DEMO · NOT CONNECTED · UI ONLY';
-export const CONFIRM_TEXT = 'Latch a local PANIC flag for SETS-500 in this browser only?';
-export const BANNER_TEXT = 'PANIC LATCHED';
 export const THRESHOLD_COPY = 'Loss intervention threshold -$75; losses may exceed this.';
-export const RESET_LABEL = 'LOCAL DEMO RESET';
+export const CONNECTED_BANNER = 'LIVE · STOP WIRED · STRATEGY DISARMED';
+export const OFFLINE_BANNER = 'NOT CONNECTED';
+export const CONFIRM_TEXT = 'Send STOP for SETS-500 to the saved Trade Oversight webhook?';
+export const STOP_SENT = 'STOP sent — await Trade Oversight confirmation';
+export const RESET_LABEL = 'ACKNOWLEDGE LATCH';
 export const RESET_DISCLAIMER = 'There is no claim that orders or exposure are resolved.';
 export const UNKNOWN = 'UNKNOWN';
 export const LEGACY_WEBHOOK_KEY = 'sets.live.webhook';
@@ -22,10 +25,13 @@ export const MODE = {
 };
 
 export const KEYS = {
-  panic: 'sets.live.panic',
-  panicAt: 'sets.live.panicAt',
+  stopSent: 'sets.live.stopSent',
+  stopSentAt: 'sets.live.stopSentAt',
   arm: 'sets.live.arm',
-  dryRunAck: 'sets.live.dryRunAck',
+  panic: 'sets.live.panic',
+  webhookUrl: 'sets.live.stopUrl',
+  webhookKey: 'sets.live.stopKey',
+  statusUrl: 'sets.live.statusUrl',
 };
 
 export const PLACEHOLDER = {
@@ -40,15 +46,133 @@ export const PLACEHOLDER = {
 
 const LOG_MAX = 40;
 
-export function canArm(state) {
-  return !!state.dryRunAck && state.mode !== MODE.PANIC;
+export function canArm() {
+  return false;
 }
 
-// 0 at a flat or winning mark, 1 at the −$75 kill. Null means there is no mark.
+export function shouldDrawMark(pnl) {
+  return Number.isFinite(pnl);
+}
+
 export function killFraction(pnl, maxLoss = MAX_LOSS_USD) {
-  if (pnl == null || !Number.isFinite(pnl) || maxLoss <= 0) return null;
+  if (!shouldDrawMark(pnl) || maxLoss <= 0) return null;
   const loss = Math.max(0, -pnl);
   return Math.max(0, Math.min(1, loss / maxLoss));
+}
+
+export function containsForbidden(value) {
+  return String(value == null ? '' : value).toLowerCase().includes(FORBIDDEN_PORTFOLIO_ID);
+}
+
+export function isHttpsUrl(url) {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || containsForbidden(trimmed)) return false;
+  let parsed;
+  try { parsed = new URL(trimmed); } catch { return false; }
+  if (parsed.username || parsed.password) return false;
+  return parsed.protocol === 'https:';
+}
+
+function safeKey(key) {
+  if (typeof key !== 'string') return '';
+  const trimmed = key.trim();
+  if (!trimmed || trimmed.length > 500 || /[\r\n]/.test(trimmed) || containsForbidden(trimmed)) return '';
+  return trimmed;
+}
+
+export function emptySettings() {
+  return { webhookUrl: '', webhookKey: '', statusUrl: '' };
+}
+
+export function webhookReady(settings) {
+  return !!(settings && isHttpsUrl(settings.webhookUrl) && safeKey(settings.webhookKey));
+}
+
+export function stopBody(now, key) {
+  return {
+    action: 'STOP',
+    portfolio: PORTFOLIO,
+    portfolio_id: PORTFOLIO_ID,
+    ts: now,
+    key,
+  };
+}
+
+export function stopRequest(settings, now) {
+  const webhookUrl = (settings && settings.webhookUrl || '').trim();
+  const key = safeKey(settings && settings.webhookKey);
+  if (!webhookUrl || !key) {
+    return { post: false, reason: 'unconfigured', detail: 'Save the Trade Oversight webhook URL and sender key first. Nothing was posted.' };
+  }
+  if (!isHttpsUrl(webhookUrl) || containsForbidden(webhookUrl)) {
+    return { post: false, reason: 'rejected', detail: 'The saved webhook must be an https URL for SETS-500. The default portfolio is refused. Nothing was posted.' };
+  }
+  return {
+    post: true,
+    url: webhookUrl,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + key,
+      'X-Webhook-Key': key,
+    },
+    body: stopBody(now, key),
+  };
+}
+
+export async function deliverStop(settings, now, fetchImpl) {
+  const plan = stopRequest(settings, now);
+  if (!plan.post) return plan;
+  const res = await fetchImpl(plan.url, {
+    method: 'POST',
+    headers: plan.headers,
+    body: JSON.stringify(plan.body),
+  });
+  return { post: true, ok: !!(res && res.ok), status: res && res.status, url: plan.url, body: plan.body };
+}
+
+function num(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function parseStatus(json) {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return { ok: false, reason: 'invalid' };
+  if (containsForbidden(JSON.stringify(json))) return { ok: false, reason: 'forbidden-portfolio' };
+  const id = json.portfolio_id || json.portfolioId || '';
+  if (id && id !== PORTFOLIO_ID) return { ok: false, reason: 'wrong-portfolio' };
+  if (json.portfolio && json.portfolio !== PORTFOLIO) return { ok: false, reason: 'wrong-portfolio' };
+  const orders = Array.isArray(json.orders) ? json.orders.slice(0, 8).map((row) => ({
+    side: row && row.side ? String(row.side) : UNKNOWN,
+    price: row && row.price != null ? String(row.price) : UNKNOWN,
+    size: row && (row.size != null ? String(row.size) : UNKNOWN) || UNKNOWN,
+    status: row && row.status ? String(row.status) : UNKNOWN,
+  })) : null;
+  return {
+    ok: true,
+    snapshot: {
+      cash: num(json.cash_usd != null ? json.cash_usd : json.cash),
+      btc: num(json.btc),
+      equity: num(json.equity_usd != null ? json.equity_usd : json.equity),
+      pnl: num(json.pnl_usd != null ? json.pnl_usd : json.pnl),
+      genome: json.genome_id ? String(json.genome_id) : null,
+      orders,
+      updatedAt: json.updated_at ? String(json.updated_at) : null,
+    },
+  };
+}
+
+export function formatUsd(n) {
+  if (!Number.isFinite(n)) return UNKNOWN;
+  const sign = n < 0 ? '−$' : '$';
+  return sign + Math.abs(n).toFixed(2);
+}
+
+export function formatBtc(n) {
+  if (!Number.isFinite(n)) return UNKNOWN;
+  return n.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') + ' BTC';
 }
 
 function stamp(now, kind, text) {
@@ -61,101 +185,133 @@ function pushLog(state, row) {
   return log;
 }
 
-function scrubDestination(storage) {
+function scrubLegacy(storage) {
   storage.removeItem(LEGACY_WEBHOOK_KEY);
+  storage.removeItem(KEYS.arm);
+  storage.removeItem('sets.live.panicAt');
+}
+
+export function loadSettings(storage, _search) {
+  scrubLegacy(storage);
+  const webhookUrl = storage.getItem(KEYS.webhookUrl) || '';
+  const webhookKey = storage.getItem(KEYS.webhookKey) || '';
+  const statusUrl = storage.getItem(KEYS.statusUrl) || '';
+  return {
+    webhookUrl: isHttpsUrl(webhookUrl) ? webhookUrl : '',
+    webhookKey: safeKey(webhookKey),
+    statusUrl: statusUrl && isHttpsUrl(statusUrl) ? statusUrl : '',
+  };
+}
+
+export function saveSettings(storage, input) {
+  const webhookUrl = (input && input.webhookUrl || '').trim();
+  const webhookKey = (input && input.webhookKey || '').trim();
+  const statusUrl = (input && input.statusUrl || '').trim();
+  if (webhookUrl && !isHttpsUrl(webhookUrl)) {
+    return { ok: false, error: 'Webhook URL must be https, without a password in the URL, and must not name the default portfolio.' };
+  }
+  if (webhookKey && !safeKey(webhookKey)) {
+    return { ok: false, error: 'Sender key was refused. It cannot contain line breaks or the default portfolio id.' };
+  }
+  if ((webhookUrl && !webhookKey) || (!webhookUrl && webhookKey)) {
+    return { ok: false, error: 'Save both the webhook URL and the sender key, or clear both.' };
+  }
+  if (statusUrl && !isHttpsUrl(statusUrl)) {
+    return { ok: false, error: 'Status URL must be https and must not name the default portfolio.' };
+  }
+  if (!webhookUrl) storage.removeItem(KEYS.webhookUrl);
+  else storage.setItem(KEYS.webhookUrl, webhookUrl);
+  if (!webhookKey) storage.removeItem(KEYS.webhookKey);
+  else storage.setItem(KEYS.webhookKey, webhookKey);
+  if (!statusUrl) storage.removeItem(KEYS.statusUrl);
+  else storage.setItem(KEYS.statusUrl, statusUrl);
+  return { ok: true, settings: loadSettings(storage, ''), error: '' };
 }
 
 export function readStore(storage) {
-  const panic = storage.getItem(KEYS.panic) === '1';
-  const dryRunAck = storage.getItem(KEYS.dryRunAck) === '1';
-  const panicAt = storage.getItem(KEYS.panicAt) || null;
-  // A stored arm flag is never shown. Reload starts DISARMED unless a local panic flag is set.
-  const mode = panic ? MODE.PANIC : MODE.DISARMED;
+  const stopSent = storage.getItem(KEYS.stopSent) === '1';
+  const panicAt = storage.getItem(KEYS.stopSentAt) || null;
   return {
-    mode,
-    dryRunAck,
-    panicAt: mode === MODE.PANIC ? panicAt : null,
+    mode: stopSent ? MODE.PANIC : MODE.DISARMED,
+    stopSent,
+    panicAt: stopSent ? panicAt : null,
   };
 }
 
 export function writeStore(storage, state) {
-  scrubDestination(storage);
-  storage.removeItem(KEYS.arm);
-  storage.setItem(KEYS.panic, state.mode === MODE.PANIC ? '1' : '0');
-  if (state.mode === MODE.PANIC && state.panicAt) storage.setItem(KEYS.panicAt, String(state.panicAt));
-  else storage.removeItem(KEYS.panicAt);
-  storage.setItem(KEYS.dryRunAck, state.dryRunAck ? '1' : '0');
+  scrubLegacy(storage);
+  storage.setItem(KEYS.stopSent, state.stopSent ? '1' : '0');
+  storage.setItem(KEYS.panic, state.stopSent ? '1' : '0');
+  if (state.stopSent && state.panicAt) storage.setItem(KEYS.stopSentAt, String(state.panicAt));
+  else storage.removeItem(KEYS.stopSentAt);
 }
 
-// `search` is accepted and ignored. A query string must not choose a destination.
-export function loadState(storage, _search, now) {
-  scrubDestination(storage);
+export function loadState(storage, search, now) {
   const saved = readStore(storage);
-  const log = [stamp(now, 'SYS', 'Demonstration idle. Not connected. Cash, BTC, equity, genome, orders, and P&L are UNKNOWN. STOP only latches a local flag. A stored arm is not restored.')];
-  if (saved.mode === MODE.PANIC) {
-    log.push(stamp(now, 'PANIC', 'Local panic flag restored from this browser. Liquidation is not wired. Arm state was not restored.'));
+  const settings = loadSettings(storage, search);
+  const log = [stamp(now, 'SYS', webhookReady(settings)
+    ? 'STOP webhook is saved in this browser. Strategy ARM stays off. Balances stay UNKNOWN until the status URL answers.'
+    : 'NOT CONNECTED. Save the Trade Oversight webhook before STOP can send. Strategy ARM stays off. Balances are UNKNOWN.')];
+  if (saved.stopSent) {
+    log.push(stamp(now, 'STOP', 'Previous STOP latch restored. ' + STOP_SENT + '. Acknowledge the latch when you have checked Trade Oversight.'));
   }
   return {
     mode: saved.mode,
-    dryRunAck: saved.dryRunAck,
+    stopSent: saved.stopSent,
     panicAt: saved.panicAt,
+    settings,
+    balances: { cash: null, btc: null, equity: null, pnl: null, genome: null, orders: null, updatedAt: null, error: '' },
     log,
   };
 }
 
 export function reduce(state, action, now = null) {
   switch (action.type) {
-    case 'ack': {
-      const dryRunAck = !!action.value;
-      if (state.mode === MODE.PANIC) {
-        if (state.dryRunAck === dryRunAck) return state;
-        return { ...state, dryRunAck };
-      }
-      if (!dryRunAck && state.mode === MODE.ARMED) {
-        return {
-          ...state,
-          dryRunAck: false,
-          mode: MODE.DISARMED,
-          log: pushLog(state, stamp(now, 'ARM', 'Dry-run acknowledgement cleared. Demo disarmed. Operational arm is not connected.')),
-        };
-      }
-      if (state.dryRunAck === dryRunAck) return state;
-      return { ...state, dryRunAck };
-    }
-    case 'arm': {
-      if (!canArm(state) || state.mode === MODE.ARMED) return state;
-      return {
-        ...state,
-        mode: MODE.ARMED,
-        log: pushLog(state, stamp(now, 'ARM', 'Dry-run demo armed. This is not an operational arm. This browser cannot place orders.')),
-      };
-    }
-    case 'disarm': {
-      if (state.mode !== MODE.ARMED) return state;
-      return {
-        ...state,
-        mode: MODE.DISARMED,
-        log: pushLog(state, stamp(now, 'ARM', 'Dry-run demo disarmed.')),
-      };
+    case 'arm':
+    case 'disarm':
+    case 'ack':
+      return state;
+    case 'settings': {
+      return { ...state, settings: action.settings };
     }
     case 'stop': {
-      const already = state.mode === MODE.PANIC;
+      if (!action.sent) {
+        return {
+          ...state,
+          log: pushLog(state, stamp(now, 'STOP', 'STOP did not send. Save the Trade Oversight webhook and sender key first. Nothing was posted.')),
+        };
+      }
+      const already = state.stopSent;
       return {
         ...state,
         mode: MODE.PANIC,
+        stopSent: true,
         panicAt: state.panicAt || now,
-        log: pushLog(state, stamp(now, 'PANIC', already
-          ? 'STOP confirmed again. Local panic flag stays latched. Nothing was sent.'
-          : 'STOP confirmed. Local panic flag latched. Liquidation is not wired. No order was sent.')),
+        log: pushLog(state, stamp(now, 'STOP', already
+          ? 'STOP sent again. ' + STOP_SENT + '. The latch stays until you acknowledge it.'
+          : STOP_SENT + '.')),
       };
     }
+    case 'stop-result': {
+      return { ...state, log: pushLog(state, stamp(now, 'STOP', action.text)) };
+    }
+    case 'status': {
+      if (!action.ok) {
+        return {
+          ...state,
+          balances: { cash: null, btc: null, equity: null, pnl: null, genome: null, orders: null, updatedAt: null, error: action.error == null ? 'Status feed unavailable.' : action.error },
+        };
+      }
+      return { ...state, balances: { ...action.snapshot, error: '' } };
+    }
     case 'clear-panic': {
-      if (state.mode !== MODE.PANIC) return state;
+      if (!state.stopSent) return state;
       return {
         ...state,
         mode: MODE.DISARMED,
+        stopSent: false,
         panicAt: null,
-        log: pushLog(state, stamp(now, 'ARM', 'Local demo reset. There is no claim that orders or exposure are resolved. Panel is DISARMED.')),
+        log: pushLog(state, stamp(now, 'STOP', 'Latch acknowledged. ' + RESET_DISCLAIMER + ' Strategy stays disarmed.')),
       };
     }
     default:

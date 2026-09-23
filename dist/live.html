@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SETS LIVE · DEMO · NOT CONNECTED</title>
-<meta name="description" content="Demonstration of a SETS-500 operator panel. UI only. Not connected. STOP latches a local flag and does not send orders.">
+<title>SETS LIVE · SETS-500</title>
+<meta name="description" content="SETS-500 operator panel. STOP posts to a webhook saved in this browser. Strategy ARM stays off. No Coinbase API keys.">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="live.css">
@@ -16,23 +16,23 @@
     <canvas id="logo" class="logo" aria-hidden="true"></canvas>
     <div class="brand">
       <h1>SETS <span>LIVE</span></h1>
-      <div class="sub">DEMO · NOT CONNECTED · UI ONLY · SETS-500 · BTC-USD SPOT</div>
+      <div class="sub" id="subLine">NOT CONNECTED · STOP OFF · STRATEGY DISARMED · SETS-500 · BTC-USD SPOT</div>
     </div>
     <a class="btn back" href="index.html">‹ PAPER</a>
     <div class="clock"><b id="clock">--:--:--</b><span class="pill idle" id="pill"><i></i><em id="pillText">DISARMED</em></span></div>
   </header>
 
-  <div class="demo-banner" role="status">
-    <b>DEMO</b>
-    <span>NOT CONNECTED</span>
-    <span>UI ONLY</span>
-    <p>Operator-UI demonstration. Not an emergency exit. STOP latches a local flag in this browser. Liquidation is not wired.</p>
+  <div class="demo-banner" id="connBanner" role="status">
+    <b id="connA">NOT CONNECTED</b>
+    <span id="connB">STOP OFF</span>
+    <span id="connC">STRATEGY DISARMED</span>
+    <p id="connText">NOT CONNECTED. Paste the Trade Oversight webhook and sender key, then save. STOP does not send until then. Strategy ARM stays off.</p>
   </div>
 
   <div id="banner" class="panic-banner" hidden role="status" aria-live="assertive">
-    <div class="kicker">LOCAL FLAG · SETS-500 · NOT AN ORDER</div>
-    <div class="word" id="bannerWord">PANIC LATCHED</div>
-    <p>Local flag only. Liquidation is not wired. This page did not cancel, sell, or convert anything.</p>
+    <div class="kicker">SETS-500 · STOP POSTED · NOT A STRATEGY ORDER</div>
+    <div class="word" id="bannerWord">AWAIT CONFIRMATION</div>
+    <p id="bannerNote">STOP sent — await Trade Oversight confirmation. There is no claim that orders or exposure are resolved.</p>
   </div>
 
   <section class="panel status-hero" aria-labelledby="armLabel">
@@ -42,7 +42,7 @@
     </div>
     <div>
       <div class="facts">
-        <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">LABEL ONLY</span></div>
+        <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">04309540-7942-460f-8509-151565372f5b</span></div>
         <div><label>PAIR</label><b>BTC-USD</b><span class="hint">SPOT</span></div>
         <div><label>FROZEN GENOME</label><b id="genome">UNKNOWN</b><span class="hint" id="genomeNote">UNAVAILABLE</span></div>
       </div>
@@ -51,15 +51,15 @@
   </section>
 
   <section class="panel killp">
-    <div class="ph"><h2>P&amp;L</h2><span class="r">UNKNOWN</span></div>
+    <div class="ph"><h2>P&amp;L</h2><span class="r" id="killHead">UNKNOWN</span></div>
     <div class="phs" id="killNote">Account data is unavailable. P&amp;L is UNKNOWN. No marker is drawn.</div>
     <canvas id="kill" role="img" aria-label="Empty P and L scale. Account data is unavailable, so there is no marker and no zero reading."></canvas>
     <div class="kill-scale"><span>UNKNOWN</span><span>NO MARKER</span><span class="loss">Loss intervention threshold -$75; losses may exceed this.</span></div>
   </section>
 
   <section class="panel">
-    <div class="ph"><h2>SILO BALANCES</h2><span class="tag">UNKNOWN</span></div>
-    <div class="phs">ACCOUNT DATA IS UNAVAILABLE. THIS PAGE DOES NOT READ AN EXCHANGE ACCOUNT.</div>
+    <div class="ph"><h2>SILO BALANCES</h2><span class="tag" id="balanceTag">UNKNOWN</span></div>
+    <div class="phs" id="asOf">Account fields stay UNKNOWN until a status URL answers. This page does not call Coinbase.</div>
     <div class="kv4 marks">
       <div><label>CASH</label><b id="mCash">UNKNOWN</b><span class="hint">USDC</span></div>
       <div><label>BTC</label><b id="mBtc">UNKNOWN</b><span class="hint">SETS-OWNED</span></div>
@@ -87,49 +87,64 @@
   </section>
 
   <section class="panel ops">
-    <div class="ph"><h2>OPERATOR</h2><span class="r">DRY-RUN DEMO</span></div>
-    <label class="check" for="ack">
-      <input id="ack" type="checkbox">
-      <span>Acknowledge dry run. ARM here is not an operational arm. It stays off until this is checked, and it stays off during panic. This panel does not send orders.</span>
+    <div class="ph"><h2>OPERATOR</h2><span class="r">STRATEGY DISARMED</span></div>
+    <label class="check">
+      <input type="checkbox" disabled>
+      <span>Strategy ARM is not implemented. This control stays off. The panel does not place strategy orders.</span>
     </label>
     <div class="op-row">
       <button id="bArm" class="btn pri" type="button" disabled>ARM</button>
       <button id="bDisarm" class="btn" type="button" disabled>DISARM</button>
-      <button id="bClear" class="btn warn" type="button" disabled>LOCAL DEMO RESET</button>
+      <button id="bClear" class="btn warn" type="button" disabled>ACKNOWLEDGE LATCH</button>
     </div>
-    <p class="phs" id="resetNote">LOCAL DEMO RESET clears the local panic flag only. There is no claim that orders or exposure are resolved.</p>
-    <div class="demo-note">
-      <label>STOP DESTINATION</label>
-      <p>Not connected. This page has no webhook field and ignores <span class="mono">?panicWebhook=</span>. A query string cannot choose where STOP goes, because STOP does not go anywhere.</p>
-      <p>A future real STOP, which this demonstration does not implement, would need a fixed, authenticated destination and a command tied to an approved session (a session id and a request id). A bare action and portfolio name would not be that command.</p>
-    </div>
+    <p class="phs" id="resetNote">ACKNOWLEDGE LATCH clears the local STOP latch only. There is no claim that orders or exposure are resolved.</p>
+    <form id="settingsForm" class="settings" autocomplete="off">
+      <div class="ph"><h2>STOP SETTINGS</h2><span class="r">THIS BROWSER ONLY</span></div>
+      <p class="phs" id="settingsNote">Not saved. STOP stays off until you save an https webhook and sender key here.</p>
+      <label class="hook">WEBHOOK URL
+        <input id="webhookUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" placeholder="https://… from SETS-500 STOP liquidate">
+      </label>
+      <label class="hook">SENDER KEY
+        <input id="webhookKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the routine sender key">
+      </label>
+      <label class="hook">STATUS URL <span class="opt">OPTIONAL</span>
+        <input id="statusUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" placeholder="https://… JSON snapshot">
+      </label>
+      <button id="bSave" class="btn pri" type="submit">SAVE IN THIS BROWSER</button>
+      <p class="phs err" id="settingsError"></p>
+      <div class="demo-note">
+        <label>HOW THE WEBHOOK IS SENT</label>
+        <p>Open the Trade Oversight routine named “SETS-500 STOP liquidate”, copy its webhook URL and sender key, paste them here, and save. They stay in this browser’s local storage. They are not committed, and <span class="mono">?panicWebhook=</span> or <span class="mono">?panic=</span> cannot change them.</p>
+        <p>STOP posts JSON <span class="mono">action</span>, <span class="mono">portfolio</span> SETS-500, <span class="mono">portfolio_id</span> 04309540-7942-460f-8509-151565372f5b, <span class="mono">ts</span>, and <span class="mono">key</span>. The same sender key is also sent as <span class="mono">Authorization: Bearer</span> and <span class="mono">X-Webhook-Key</span>. The default portfolio fec63e7b-dccd-5b1f-9ae1-0700e22e92db is refused.</p>
+      </div>
+    </form>
   </section>
 
   <footer class="foot">
-    Paper evolution stays paper. SETS LIVE is a demonstration of an operator screen, not an emergency exit.
-    It cannot place Coinbase orders. Liquidation is not wired. Browser tests do not establish Coinbase isolation.
-    No API keys. Not financial advice.
+    Paper evolution stays paper. SETS LIVE can post STOP to a webhook you save in this browser.
+    It does not hold Coinbase API keys and it does not place strategy orders. ARM stays off.
+    Acknowledging the latch does not mean exposure is resolved. Not financial advice.
   </footer>
 </main>
 
-<div class="stop-dock" role="region" aria-label="Demonstration stop">
-  <button id="bStop" class="stop" type="button" aria-describedby="stopHint">STOP</button>
-  <span id="stopHint">Latches a local PANIC flag in this browser. Liquidation is not wired. Asks before it latches.</span>
+<div class="stop-dock" role="region" aria-label="Stop">
+  <button id="bStop" class="stop" type="button" disabled aria-describedby="stopHint">STOP</button>
+  <span id="stopHint">STOP is off until a webhook and sender key are saved in this browser. Nothing is sent.</span>
 </div>
 
 <dialog id="modal" aria-labelledby="modalTitle">
   <form method="dialog">
     <h2 id="modalTitle">CONFIRM STOP</h2>
-    <p id="modalBody">Latch a local PANIC flag for SETS-500 in this browser only?</p>
+    <p id="modalBody">Send STOP for SETS-500 to the saved Trade Oversight webhook?</p>
     <p id="modalWarn"></p>
     <div class="modal-actions">
       <button type="submit" id="modalCancel" class="btn" value="cancel">BACK</button>
-      <button type="submit" id="modalOk" class="btn stop-ok" value="ok">LATCH PANIC</button>
+      <button type="submit" id="modalOk" class="btn stop-ok" value="ok">SEND STOP</button>
     </div>
   </form>
 </dialog>
 
-<noscript><p class="foot">SETS LIVE needs JavaScript to latch the panic flag. It still cannot place Coinbase orders.</p></noscript>
+<noscript><p class="foot">SETS LIVE needs JavaScript to save a webhook and send STOP. It still cannot place strategy orders.</p></noscript>
 <script type="module" src="live.js"></script>
 </body>
 </html>

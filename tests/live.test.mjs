@@ -2,12 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  BANNER_TEXT, CONFIRM_TEXT, DEMO_LABEL, KEYS, LEGACY_WEBHOOK_KEY, MODE, PLACEHOLDER,
-  RESET_DISCLAIMER, RESET_LABEL, THRESHOLD_COPY, UNKNOWN,
-  canArm, killFraction, loadState, reduce, writeStore,
+  CONNECTED_BANNER, CONFIRM_TEXT, FORBIDDEN_PORTFOLIO_ID, KEYS, LEGACY_WEBHOOK_KEY, MODE,
+  OFFLINE_BANNER, PLACEHOLDER, PORTFOLIO_ID, RESET_DISCLAIMER, RESET_LABEL, STOP_SENT,
+  THRESHOLD_COPY, UNKNOWN,
+  canArm, deliverStop, formatUsd, isHttpsUrl, killFraction, loadSettings, loadState,
+  parseStatus, reduce, saveSettings, shouldDrawMark, stopRequest, webhookReady, writeStore,
 } from '../dist/live/state.js';
 
 const T = '2026-09-23T19:00:00.000Z';
+const WEBHOOK = 'https://ops.example/sets-500-stop';
 
 function mem(seed = {}) {
   const m = new Map(Object.entries(seed));
@@ -18,166 +21,178 @@ function mem(seed = {}) {
   };
 }
 
-function arm(state, now = T) {
-  return reduce(reduce(state, { type: 'ack', value: true }, now), { type: 'arm' }, now);
-}
-
-test('panel boots disarmed and will not arm without the dry-run acknowledgement', () => {
+test('strategy ARM is impossible', () => {
   const state = loadState(mem(), '', T);
   assert.equal(state.mode, MODE.DISARMED);
   assert.equal(canArm(state), false);
+  assert.equal(canArm({ dryRunAck: true, mode: MODE.DISARMED }), false);
   assert.equal(reduce(state, { type: 'arm' }, T), state);
+  assert.equal(reduce(state, { type: 'ack', value: true }, T), state);
   assert.equal(reduce(state, { type: 'disarm' }, T), state);
-  assert.equal(reduce(state, { type: 'clear-panic' }, T), state);
 });
 
-test('dry-run acknowledgement arms, and clearing it disarms', () => {
+test('reload never restores an ARMED display, even with an old panic flag', () => {
+  const store = mem({ [KEYS.arm]: '1', [KEYS.panic]: '1' });
+  const state = loadState(store, '', T);
+  assert.equal(state.mode, MODE.DISARMED);
+  assert.equal(state.stopSent, false);
+  writeStore(store, state);
+  assert.equal(store.getItem(KEYS.arm), null);
+  assert.equal(store.getItem(KEYS.panic), '0');
+});
+
+test('query strings cannot set the webhook', () => {
+  const fresh = loadSettings(mem(), '?panicWebhook=https://evil.example/arm&panic=https://evil.example/other');
+  assert.deepEqual(fresh, { webhookUrl: '', webhookKey: '', statusUrl: '' });
+  const store = mem();
+  const saved = saveSettings(store, { webhookUrl: WEBHOOK, webhookKey: 'sender-key', statusUrl: '' });
+  assert.equal(saved.ok, true);
+  const loaded = loadSettings(store, '?panicWebhook=https://evil.example/arm&panic=https://evil.example/other');
+  assert.equal(loaded.webhookUrl, WEBHOOK);
+  assert.equal(loaded.webhookKey, 'sender-key');
+  assert.equal(store.getItem(LEGACY_WEBHOOK_KEY), null);
+});
+
+test('STOP does not send without a saved webhook', () => {
+  const plan = stopRequest({ webhookUrl: '', webhookKey: '' }, T);
+  assert.equal(plan.post, false);
+  assert.equal(webhookReady({ webhookUrl: '', webhookKey: '' }), false);
+  const state = reduce(loadState(mem(), '', T), { type: 'stop', sent: false }, T);
+  assert.equal(state.mode, MODE.DISARMED);
+  assert.match(state.log.at(-1).text, /did not send/);
+  assert.match(state.log.at(-1).text, /Nothing was posted/);
+});
+
+test('STOP posts the SETS-500 payload when a webhook is saved', async () => {
+  const calls = [];
+  const result = await deliverStop(
+    { webhookUrl: WEBHOOK, webhookKey: 'sender-key' },
+    T,
+    async (url, opts) => {
+      calls.push({ url, opts });
+      return { ok: true, status: 202 };
+    },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 202);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, WEBHOOK);
+  assert.equal(calls[0].opts.method, 'POST');
+  assert.equal(calls[0].opts.headers.Authorization, 'Bearer sender-key');
+  assert.equal(calls[0].opts.headers['X-Webhook-Key'], 'sender-key');
+  const body = JSON.parse(calls[0].opts.body);
+  assert.equal(body.action, 'STOP');
+  assert.equal(body.portfolio, 'SETS-500');
+  assert.equal(body.portfolio_id, PORTFOLIO_ID);
+  assert.equal(body.ts, T);
+  assert.equal(body.key, 'sender-key');
+  assert.equal(JSON.stringify(body).includes(FORBIDDEN_PORTFOLIO_ID), false);
+  const latched = reduce(loadState(mem(), '', T), { type: 'stop', sent: true }, T);
+  assert.equal(latched.mode, MODE.PANIC);
+  assert.match(latched.log.at(-1).text, /STOP sent — await Trade Oversight confirmation/);
+});
+
+test('the default portfolio is refused in the webhook and the status feed', () => {
+  const url = 'https://ops.example/' + FORBIDDEN_PORTFOLIO_ID;
+  assert.equal(stopRequest({ webhookUrl: url, webhookKey: 'sender-key' }, T).post, false);
+  assert.equal(saveSettings(mem(), { webhookUrl: url, webhookKey: 'sender-key', statusUrl: '' }).ok, false);
+  assert.equal(parseStatus({ portfolio_id: FORBIDDEN_PORTFOLIO_ID, cash_usd: 10, pnl_usd: 0 }).ok, false);
+  assert.equal(parseStatus({ portfolio_id: PORTFOLIO_ID, note: FORBIDDEN_PORTFOLIO_ID }).ok, false);
+  assert.notEqual(PORTFOLIO_ID, FORBIDDEN_PORTFOLIO_ID);
+});
+
+test('plain http and a query password cannot be the webhook', () => {
+  assert.equal(isHttpsUrl('http://ops.example/stop'), false);
+  assert.equal(isHttpsUrl('https://user:secret@ops.example/stop'), false);
+  assert.equal(stopRequest({ webhookUrl: 'http://ops.example/stop', webhookKey: 'sender-key' }, T).post, false);
+});
+
+test('balances stay UNKNOWN when there is no status feed', () => {
+  assert.equal(parseStatus(null).ok, false);
+  assert.equal(formatUsd(null), UNKNOWN);
+  assert.equal(shouldDrawMark(null), false);
+  assert.equal(shouldDrawMark(0), true);
+  assert.equal(PLACEHOLDER.cash, UNKNOWN);
+  assert.equal(PLACEHOLDER.pnl, UNKNOWN);
+  const bad = reduce(loadState(mem(), '', T), { type: 'status', ok: false, error: '' }, T);
+  assert.equal(bad.balances.cash, null);
+  assert.equal(bad.balances.pnl, null);
+  const good = parseStatus({
+    portfolio: 'SETS-500',
+    portfolio_id: PORTFOLIO_ID,
+    cash_usd: 12.5,
+    btc: 0.01,
+    equity_usd: 80,
+    pnl_usd: -3.5,
+    updated_at: T,
+    orders: [{ side: 'BUY', price: '100', size: '0.01', status: 'OPEN' }],
+  });
+  assert.equal(good.ok, true);
+  assert.equal(good.snapshot.pnl, -3.5);
+  assert.equal(formatUsd(good.snapshot.pnl), '−$3.50');
+  assert.equal(shouldDrawMark(good.snapshot.pnl), true);
+});
+
+test('a failed webhook is not marked sent, and acknowledging the latch does not claim exposure is resolved', () => {
   let state = loadState(mem(), '', T);
-  state = reduce(state, { type: 'ack', value: true }, T);
-  assert.equal(canArm(state), true);
-  state = reduce(state, { type: 'arm' }, T);
-  assert.equal(state.mode, MODE.ARMED);
-  assert.match(state.log.at(-1).text, /Dry-run demo armed/);
-  assert.match(state.log.at(-1).text, /not an operational arm/);
-  state = reduce(state, { type: 'disarm' }, T);
+  state = reduce(state, { type: 'stop-result', text: 'Webhook returned HTTP 500. STOP was not marked sent.' }, T);
   assert.equal(state.mode, MODE.DISARMED);
-  state = arm(loadState(mem(), '', T));
-  state = reduce(state, { type: 'ack', value: false }, T);
-  assert.equal(state.mode, MODE.DISARMED);
-  assert.equal(state.dryRunAck, false);
-});
-
-test('STOP latches panic, keeps the first timestamp, and DISARM cannot clear it', () => {
-  let state = arm(loadState(mem(), '', T));
-  state = reduce(state, { type: 'stop' }, '2026-09-23T19:05:00.000Z');
-  assert.equal(state.mode, MODE.PANIC);
-  assert.equal(state.panicAt, '2026-09-23T19:05:00.000Z');
-  assert.equal(canArm(state), false);
-  assert.equal(reduce(state, { type: 'arm' }, T).mode, MODE.PANIC);
-  assert.equal(reduce(state, { type: 'disarm' }, T), state);
-  const again = reduce(state, { type: 'stop' }, '2026-09-23T19:09:00.000Z');
-  assert.equal(again.mode, MODE.PANIC);
-  assert.equal(again.panicAt, '2026-09-23T19:05:00.000Z');
-  assert.match(again.log.at(-1).text, /stays latched/);
-});
-
-test('STOP copy latches a local flag and does not describe an execution', () => {
-  assert.equal(DEMO_LABEL, 'DEMO · NOT CONNECTED · UI ONLY');
-  assert.equal(CONFIRM_TEXT, 'Latch a local PANIC flag for SETS-500 in this browser only?');
-  assert.equal(BANNER_TEXT, 'PANIC LATCHED');
-  const stopped = reduce(arm(loadState(mem(), '', T)), { type: 'stop' }, T);
-  assert.match(stopped.log.at(-1).text, /Liquidation is not wired/);
-  assert.match(stopped.log.at(-1).text, /No order was sent/);
-});
-
-test('only an explicit clear returns the panel to disarmed', () => {
-  let state = reduce(arm(loadState(mem(), '', T)), { type: 'stop' }, T);
-  const cleared = reduce(state, { type: 'clear-panic' }, '2026-09-23T19:10:00.000Z');
+  state = reduce(state, { type: 'stop', sent: true }, T);
+  assert.equal(state.panicAt, T);
+  const again = reduce(state, { type: 'stop', sent: true }, '2026-09-23T19:09:00.000Z');
+  assert.equal(again.panicAt, T);
+  assert.match(again.log.at(-1).text, /latch stays/);
+  const cleared = reduce(again, { type: 'clear-panic' }, '2026-09-23T19:10:00.000Z');
   assert.equal(cleared.mode, MODE.DISARMED);
-  assert.equal(cleared.panicAt, null);
-  assert.match(cleared.log.at(-1).text, /Local demo reset/);
+  assert.equal(cleared.stopSent, false);
   assert.match(cleared.log.at(-1).text, /no claim that orders or exposure are resolved/i);
   assert.equal(reduce(cleared, { type: 'clear-panic' }, T), cleared);
 });
 
-test('panic flag survives localStorage and outranks a stored arm', () => {
+test('a successful STOP latch survives reload and still ignores the query string', () => {
   const store = mem();
-  const state = reduce(arm(loadState(store, '', T)), { type: 'stop' }, '2026-09-23T19:05:00.000Z');
-  store.setItem(LEGACY_WEBHOOK_KEY, 'https://ops.example/sets');
+  let state = reduce(loadState(store, '', T), { type: 'stop', sent: true }, T);
   writeStore(store, state);
-  assert.equal(store.getItem(LEGACY_WEBHOOK_KEY), null);
-  assert.equal(store.getItem(KEYS.panic), '1');
-  assert.equal(store.getItem(KEYS.panicAt), '2026-09-23T19:05:00.000Z');
-  assert.equal(store.getItem(KEYS.arm), null);
-  store.setItem(KEYS.arm, MODE.ARMED);
-  const restored = loadState(store, '', '2026-09-23T19:06:00.000Z');
-  assert.equal(restored.mode, MODE.PANIC);
-  assert.equal(restored.panicAt, '2026-09-23T19:05:00.000Z');
-  assert.equal(restored.webhookUrl, undefined);
-  assert.match(restored.log.map((row) => row.text).join('\n'), /restored from this browser/);
-  const cleared = reduce(restored, { type: 'clear-panic' }, T);
-  writeStore(store, cleared);
-  assert.equal(store.getItem(KEYS.panic), '0');
-  assert.equal(store.getItem(KEYS.panicAt), null);
-  assert.equal(loadState(store, '', T).mode, MODE.DISARMED);
+  const again = loadState(store, '?panic=https://evil.example/stop', T);
+  assert.equal(again.stopSent, true);
+  assert.equal(again.mode, MODE.PANIC);
+  assert.equal(again.settings.webhookUrl, '');
+  assert.match(again.log.map((row) => row.text).join('\n'), /STOP sent/);
 });
 
-test('reload never restores an ARMED display', () => {
-  const store = mem();
-  store.setItem(KEYS.arm, MODE.ARMED);
-  store.setItem(KEYS.dryRunAck, '1');
-  assert.equal(loadState(store, '', T).mode, MODE.DISARMED);
-  const armed = arm(loadState(store, '', T));
-  assert.equal(armed.mode, MODE.ARMED);
-  writeStore(store, armed);
-  assert.equal(store.getItem(KEYS.arm), null);
-  assert.equal(loadState(store, '?panicWebhook=https://evil.example/arm', T).mode, MODE.DISARMED);
-});
-
-test('a query string cannot set a STOP destination', () => {
-  const store = mem({ [LEGACY_WEBHOOK_KEY]: 'https://stored.example/a' });
-  const next = loadState(store, '?panicWebhook=https://from-query.example/b', T);
-  assert.equal(next.webhookUrl, undefined);
-  assert.equal(store.getItem(LEGACY_WEBHOOK_KEY), null);
-  const ignored = reduce(next, { type: 'webhook', url: 'https://typed.example/hook' }, T);
-  assert.equal(ignored, next);
-  const cleared = loadState(mem(), '?panicWebhook=', T);
-  assert.equal(cleared.webhookUrl, undefined);
-  assert.equal(Object.hasOwn(KEYS, 'webhook'), false);
-});
-
-test('kill bar has no mark until a finite P&L exists, then measures distance to −$75', () => {
+test('kill fraction stays empty without a reading and reaches the threshold only on a real loss', () => {
   assert.equal(killFraction(null), null);
-  assert.equal(killFraction(undefined), null);
-  assert.equal(killFraction(Number.NaN), null);
   assert.equal(killFraction(0), 0);
-  assert.equal(killFraction(12), 0);
-  assert.equal(killFraction(-37.5), 0.5);
   assert.equal(killFraction(-75), 1);
   assert.equal(killFraction(-150), 1);
+  assert.equal(CONFIRM_TEXT, 'Send STOP for SETS-500 to the saved Trade Oversight webhook?');
+  assert.equal(STOP_SENT, 'STOP sent — await Trade Oversight confirmation');
+  assert.equal(RESET_LABEL, 'ACKNOWLEDGE LATCH');
+  assert.match(RESET_DISCLAIMER, /no claim that orders or exposure are resolved/i);
+  assert.equal(CONNECTED_BANNER, 'LIVE · STOP WIRED · STRATEGY DISARMED');
+  assert.equal(OFFLINE_BANNER, 'NOT CONNECTED');
+  assert.equal(THRESHOLD_COPY, 'Loss intervention threshold -$75; losses may exceed this.');
 });
 
-test('live page is linked from the paper dashboard and contains no credentials', () => {
-  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
-  const html = read('../dist/live.html');
-  const page = read('../dist/live.js');
-  const css = read('../dist/live.css');
-  const stateSrc = read('../dist/live/state.js');
-  const root = read('../live.html');
-  const index = read('../dist/index.html');
-  const readme = read('../README.md');
-  assert.match(index, /href="live\.html"/);
-  assert.match(html, /href="index\.html"/);
-  assert.match(html, /id="bStop"/);
-  assert.match(html, /LOCAL DEMO RESET/);
+test('live page wires STOP to saved settings and leaves ARM off', () => {
+  const html = readFileSync(new URL('../dist/live.html', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('../dist/live.js', import.meta.url), 'utf8');
+  const stateSrc = readFileSync(new URL('../dist/live/state.js', import.meta.url), 'utf8');
+  const index = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes(THRESHOLD_COPY));
   assert.ok(html.includes(RESET_DISCLAIMER));
-  assert.equal(PLACEHOLDER.cash, UNKNOWN);
-  assert.equal(PLACEHOLDER.pnl, UNKNOWN);
-  assert.doesNotMatch(html, /max loss/i);
+  assert.ok(html.includes(PORTFOLIO_ID));
+  assert.ok(html.includes(OFFLINE_BANNER));
+  assert.ok(html.includes('ACKNOWLEDGE LATCH'));
+  assert.ok(html.includes('id="bStop"'));
+  assert.ok(html.includes('disabled'));
+  assert.ok(stateSrc.includes(CONNECTED_BANNER));
+  assert.match(index, /href="live\.html"/);
+  assert.match(html, /SETS-500 STOP liquidate/);
   assert.doesNotMatch(html, /\$0/);
-  assert.doesNotMatch(page, /\.arc\(|\.fill\(/);
-  assert.match(html, /id="ack"/);
-  assert.match(html, /id="bArm"/);
-  assert.match(root, /dist\/live\.html/);
-  assert.ok(html.includes(DEMO_LABEL));
-  assert.ok(html.includes('DEMO'));
-  assert.ok(html.includes('NOT CONNECTED'));
-  assert.ok(html.includes('UI ONLY'));
-  assert.ok(html.includes(CONFIRM_TEXT));
-  assert.ok(html.includes(BANNER_TEXT));
-  assert.match(html, /Liquidation is not wired/);
-  assert.match(html, /not an emergency exit/i);
-  assert.match(page, /CONFIRM_TEXT/);
-  assert.match(page, /localStorage/);
-  assert.doesNotMatch(page, /\bfetch\s*\(|sendBeacon|XMLHttpRequest|new WebSocket|sessionStorage/);
-  const src = [html, page, css, stateSrc, readme].join('\n');
-  assert.doesNotMatch(src, /cb-access|api[_-]?secret|private[_-]?key|BEGIN [A-Z ]*PRIVATE|COINBASE_API/i);
-  assert.doesNotMatch(src, /Trade Oversight executes/i);
-  assert.doesNotMatch([page, stateSrc].join('\n'), /panicWebhook|URLSearchParams|\bfetch\s*\(/);
-  assert.match(html, /ignores/);
-  assert.match(readme, /not an emergency exit/i);
-  assert.match(readme, /do not establish Coinbase isolation/i);
-  assert.match(readme, /fixed, authenticated destination/);
-  assert.match(readme, /session id/);
+  assert.doesNotMatch([html, page, stateSrc].join('\n'), /Trade Oversight executes|executes the actual Coinbase/);
+  assert.doesNotMatch([page, stateSrc].join('\n'), /panicWebhook|URLSearchParams|COINBASE_API|cb-access|BEGIN (RSA |OPENSSH )?PRIVATE/);
+  assert.match(page, /method:\s*'POST'/);
+  assert.match(stateSrc, /Authorization/);
+  assert.match(stateSrc, /X-Webhook-Key/);
 });

@@ -39,7 +39,7 @@ Every 4.8 seconds a new generation is born. Immigrants and offspring appear in t
 - Keyboard: **Space** pause, **→** step, **1–4** speed.
 - URL options: `?seed=42`, `?speed=4`, `?warm=50` (evolve 50 generations instantly on load), `?paused`.
 - Works on phones: panels stack, nothing scrolls sideways.
-- **LIVE DEMO ›** opens a labeled demonstration of an operator screen. It is not part of the paper loop, and it is not connected to an exchange.
+- **LIVE ›** opens the SETS-500 operator panel. It is not part of the paper loop. STOP uses a webhook saved in that browser, and strategy ARM stays off.
 
 <p align="center"><img src="docs/images/mobile.png" width="300" alt="SETS MACHINE on a 390 px wide phone screen"></p>
 
@@ -47,21 +47,55 @@ Full-page screenshot: [docs/images/dashboard.png](docs/images/dashboard.png)
 
 ## LIVE operator panel
 
-Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `live.html` at the site root, which forwards there) is an **operator-UI demonstration only**. The page is labeled **DEMO · NOT CONNECTED · UI ONLY**. It is not an emergency exit. Passing the browser tests does not establish Coinbase isolation, and these tests do not establish Coinbase isolation of any account.
+Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `live.html` at the site root, which forwards there) is the SETS-500 operator panel. It can post **STOP** to a Trade Oversight webhook you save in that browser. It does not hold Coinbase API keys, and strategy **ARM stays off**.
 
-| | Paper machine | LIVE demonstration |
+| | Paper machine | LIVE panel |
 | --- | --- | --- |
-| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows a SETS-500 mock: BTC-USD spot, a loss intervention threshold of -$75 that losses may exceed, a dry-run arm state, and UNKNOWN account fields |
-| Orders | Simulated fills on the bundled tape | None. The page stores no Coinbase API keys and cannot cancel, sell, or convert |
-| Stop | A strategy stop inside the paper bot | A red STOP that latches a **local** PANIC flag in this browser. Liquidation is not wired |
+| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | SETS-500 only (`04309540-7942-460f-8509-151565372f5b`), BTC-USD spot, loss intervention threshold of -$75 that losses may exceed |
+| Orders | Simulated fills on the bundled tape | No strategy orders. ARM cannot be turned on |
+| Stop | A strategy stop inside the paper bot | Red STOP posts to the webhook saved in this browser |
 
-STOP writes `sets.live.panic` to `localStorage` and shows **PANIC LATCHED**. It does not send a webhook. `?panicWebhook=` is ignored, and the page has no field that can choose a STOP destination. Nothing on this page cancels orders, sells BTC, or converts to USDC.
+Until that webhook is saved, the banner reads **NOT CONNECTED** and STOP is disabled. After you save it, the banner reads **LIVE · STOP WIRED · STRATEGY DISARMED**. `?panicWebhook=` and `?panic=` are ignored. The default portfolio `fec63e7b-dccd-5b1f-9ae1-0700e22e92db` is refused in the webhook URL, the sender key, and any status JSON.
 
-ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. That control is a dry-run demo for the current page view only. Operational arm is not connected, and a reload does not restore ARMED from browser storage. DISARM does not clear panic. The only reset is **LOCAL DEMO RESET**, which clears the local flag. There is no claim that orders or exposure are resolved.
+### Paste the STOP webhook
 
-Cash, BTC, equity, P&L, and open orders read **UNKNOWN** when account data is unavailable. The P&L scale draws no marker and no fill at $0. The threshold line is: “Loss intervention threshold -$75; losses may exceed this.”
+1. Open the Trade Oversight routine named **SETS-500 STOP liquidate**.
+2. Copy its webhook URL and sender key.
+3. On SETS LIVE, paste both into **STOP SETTINGS** and press **SAVE IN THIS BROWSER**. They stay in `localStorage` for this origin. They are not written into the repo.
+4. Press STOP and confirm. The page POSTs JSON to that saved URL:
 
-A future real STOP wire-up, which this demonstration does not implement, would need a fixed, authenticated destination and a command tied to an approved session (a session id and a request id). A URL typed into the page or passed as a query parameter would not be that destination, and a bare action plus portfolio name would not be that command.
+```json
+{
+  "action": "STOP",
+  "portfolio": "SETS-500",
+  "portfolio_id": "04309540-7942-460f-8509-151565372f5b",
+  "ts": "2026-09-23T19:00:00.000Z",
+  "key": "<sender key>"
+}
+```
+
+The same sender key is sent three ways, because this repo does not have a separate Grok Bot header spec: `Authorization: Bearer <sender key>`, the `X-Webhook-Key` header, and the JSON `key` field. Use whichever of those the routine already checks. The endpoint must allow this page’s origin, or the browser will not treat the post as confirmed.
+
+A successful post latches the panel and shows **STOP sent — await Trade Oversight confirmation**. The latch stays until you press **ACKNOWLEDGE LATCH**. That acknowledgement does not claim that orders or exposure are resolved. A failed post is not marked sent. A reload does not restore ARMED.
+
+### Status feed
+
+Balances are **UNKNOWN** until you optionally save an https status URL. The page polls that URL about every 15 seconds and does not call Coinbase itself. If the URL is unset or the fetch fails, cash, BTC, equity, P&L, and orders stay UNKNOWN and the P&L scale draws no marker. A real reading may draw a marker. The JSON shape is:
+
+```json
+{
+  "portfolio": "SETS-500",
+  "portfolio_id": "04309540-7942-460f-8509-151565372f5b",
+  "updated_at": "2026-09-23T19:00:00.000Z",
+  "cash_usd": 100.5,
+  "btc": 0.001,
+  "equity_usd": 175.2,
+  "pnl_usd": -12.4,
+  "orders": [{ "side": "BUY", "price": "100000", "size": "0.001", "status": "OPEN" }]
+}
+```
+
+The threshold line stays: “Loss intervention threshold -$75; losses may exceed this.”
 
 ## Promo
 
@@ -148,7 +182,7 @@ Read this before getting excited:
 - Picking the leader from configs that passed the gate reuses the out-of-sample data, so its numbers are optimistic.
 - High win rates come from wide stops that were never hit in this window. That is exactly the risk a grid carries.
 
-SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money. The [LIVE operator panel](#live-operator-panel) is a labeled demonstration, not a connection to a capped silo. It has no API keys and cannot send orders.
+SETS MACHINE is a transparent research toy for watching evolutionary search work. It is **not** a trading bot to connect to real money. The [LIVE operator panel](#live-operator-panel) can post STOP to a webhook saved in the browser. It has no Coinbase API keys and cannot arm a strategy.
 
 ## Under the hood
 
@@ -157,7 +191,7 @@ index.html            Redirects to dist/ (for GitHub Pages)
 live.html             Redirects to dist/live.html
 dist/
   index.html          Paper dashboard shell and controls. Links to LIVE
-  live.html           SETS LIVE demonstration: DEMO banner, dry-run arm, local STOP
+  live.html           SETS LIVE: SETS-500 STOP webhook, status feed, strategy disarmed
   live.js             Local panic flag and confirm flow. No webhook and no orders
   live.css            LIVE layout. The red STOP stays on screen
   live/state.js       Arm / panic state machine, no DOM and no credentials
@@ -176,7 +210,7 @@ tests/                Node test runner: data, indicators, bot mechanics, GA, LIV
 docs/                 README images, GIFs and the promo video
 ```
 
-Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. The paper dashboard and the SETS LIVE demonstration make no external requests.
+Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. The paper dashboard makes no external requests. SETS LIVE requests only the webhook and status URL saved in that browser.
 
 ## Credits & licence
 
@@ -186,4 +220,4 @@ Built with plain HTML, CSS and JavaScript modules on `<canvas>`. No frameworks. 
 
 Code is MIT licensed, see [LICENSE](LICENSE). Test results are in [VALIDATION.md](VALIDATION.md).
 
-> **Not financial advice.** Paper trading on historical data only. SETS LIVE does not connect to Coinbase, holds no keys, and places no orders. Past performance, simulated or not, does not predict future results.
+> **Not financial advice.** Paper trading on historical data only. SETS LIVE does not call Coinbase and holds no Coinbase keys. STOP posts only to a webhook saved in the browser. Strategy ARM stays off. Past performance, simulated or not, does not predict future results.
