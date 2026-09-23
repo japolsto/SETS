@@ -67,7 +67,8 @@ export class Evolution {
     this.pop = [];
     for (let k = 0; k < this.N; k++) this.pop.push(this._make(randomGenome(this.r), [], []));
     this._rank();
-    this._record([], [], this.pop.map((x) => x.id));
+    // Generation 0 is the random starting population. Nothing has been selected out yet.
+    this._record([], [], []);
   }
 
   _make(genome, parents, changed) {

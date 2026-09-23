@@ -36,6 +36,7 @@
     <label class="seed">SEED <input id="seed" type="number" min="1" max="999999" inputmode="numeric"></label>
     <button id="bSeed" class="btn" title="Restart with this seed">RESTART</button>
     <button id="bRand" class="btn" title="Random seed">NEW SEED</button>
+    <a class="btn livejump" href="live.html" title="SETS-500 operator panel. STOP uses a webhook saved in this browser. Strategy ARM stays off.">LIVE ›</a>
     <span class="meta" id="meta"></span>
   </nav>
 
@@ -97,6 +98,7 @@
     <div class="panel chartp">
       <div class="ph"><h2>GRID ENGINE · <span class="acc" id="chSym">BTCUSDT</span> · PAPER</h2><span class="r" id="chState"></span></div>
       <div class="phs" id="chCfg"></div>
+      <div class="phs" id="chBench"></div>
       <div class="ohlc" id="ohlc"></div>
       <canvas id="chart" class="grow" role="img" aria-label="Paper trading replay on out-of-sample candles"></canvas>
       <div class="kv6">
@@ -121,7 +123,9 @@
   </section>
 
   <footer class="foot">
-    Paper trading on historical Binance candles. No exchange connection, no keys, no real orders. Not financial advice.
+      Paper trading on historical Binance candles. No exchange connection, no keys, no real orders.
+      <a href="live.html">SETS LIVE</a> can post STOP to a webhook saved in that browser. Strategy ARM stays off.
+    Not financial advice.
     · MIT licensed
   </footer>
 </main>

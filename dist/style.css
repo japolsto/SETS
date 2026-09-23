@@ -78,6 +78,9 @@ label { display: block; color: var(--mute); font-size: 8.5px; letter-spacing: .0
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; cursor: pointer;
 }
 .btn:hover { border-color: var(--royal); color: var(--royal); }
+a.btn { text-decoration: none; }
+a.livejump { color: var(--royal); border-color: var(--royal); }
+a.livejump:hover { background: var(--pale); }
 .btn:focus-visible, .seed input:focus-visible { outline: 2px solid var(--royal); outline-offset: 2px; }
 .btn.pri { background: var(--navy); color: #fff; border-color: var(--navy); min-width: 92px; }
 .btn.pri:hover { background: var(--royal); border-color: var(--royal); color: #fff; }
