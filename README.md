@@ -51,13 +51,15 @@ Paper evolution stays paper. [SETS LIVE](dist/live.html) (`dist/live.html`, or `
 
 | | Paper machine | LIVE demonstration |
 | --- | --- | --- |
-| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows a SETS-500 mock: BTC-USD spot, max loss −$75, a dry-run arm state, placeholders for cash / BTC / equity / frozen genome |
+| What it does | Breeds grid-DCA configs and paper-trades the leader on historical BTCUSDT | Shows a SETS-500 mock: BTC-USD spot, a loss intervention threshold of -$75 that losses may exceed, a dry-run arm state, and UNKNOWN account fields |
 | Orders | Simulated fills on the bundled tape | None. The page stores no Coinbase API keys and cannot cancel, sell, or convert |
 | Stop | A strategy stop inside the paper bot | A red STOP that latches a **local** PANIC flag in this browser. Liquidation is not wired |
 
 STOP writes `sets.live.panic` to `localStorage` and shows **PANIC LATCHED**. It does not send a webhook. `?panicWebhook=` is ignored, and the page has no field that can choose a STOP destination. Nothing on this page cancels orders, sells BTC, or converts to USDC.
 
-ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. That control is a dry-run demo. Operational arm is not connected. DISARM does not clear panic. The only reset is **CLEAR PANIC (OPERATOR)**, which clears the local flag and does not undo an order, because no order was sent.
+ARM stays disabled until the dry-run acknowledgement is checked, and it stays disabled while panic is latched. That control is a dry-run demo for the current page view only. Operational arm is not connected, and a reload does not restore ARMED from browser storage. DISARM does not clear panic. The only reset is **LOCAL DEMO RESET**, which clears the local flag. There is no claim that orders or exposure are resolved.
+
+Cash, BTC, equity, P&L, and open orders read **UNKNOWN** when account data is unavailable. The P&L scale draws no marker and no fill at $0. The threshold line is: “Loss intervention threshold -$75; losses may exceed this.”
 
 A future real STOP wire-up, which this demonstration does not implement, would need a fixed, authenticated destination and a command tied to an approved session (a session id and a request id). A URL typed into the page or passed as a query parameter would not be that destination, and a bare action plus portfolio name would not be that command.
 

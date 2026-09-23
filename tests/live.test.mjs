@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  BANNER_TEXT, CONFIRM_TEXT, DEMO_LABEL, KEYS, LEGACY_WEBHOOK_KEY, MODE,
+  BANNER_TEXT, CONFIRM_TEXT, DEMO_LABEL, KEYS, LEGACY_WEBHOOK_KEY, MODE, PLACEHOLDER,
+  RESET_DISCLAIMER, RESET_LABEL, THRESHOLD_COPY, UNKNOWN,
   canArm, killFraction, loadState, reduce, writeStore,
 } from '../dist/live/state.js';
 
@@ -74,7 +75,8 @@ test('only an explicit clear returns the panel to disarmed', () => {
   const cleared = reduce(state, { type: 'clear-panic' }, '2026-09-23T19:10:00.000Z');
   assert.equal(cleared.mode, MODE.DISARMED);
   assert.equal(cleared.panicAt, null);
-  assert.match(cleared.log.at(-1).text, /No liquidation was sent/);
+  assert.match(cleared.log.at(-1).text, /Local demo reset/);
+  assert.match(cleared.log.at(-1).text, /no claim that orders or exposure are resolved/i);
   assert.equal(reduce(cleared, { type: 'clear-panic' }, T), cleared);
 });
 
@@ -86,7 +88,8 @@ test('panic flag survives localStorage and outranks a stored arm', () => {
   assert.equal(store.getItem(LEGACY_WEBHOOK_KEY), null);
   assert.equal(store.getItem(KEYS.panic), '1');
   assert.equal(store.getItem(KEYS.panicAt), '2026-09-23T19:05:00.000Z');
-  assert.equal(store.getItem(KEYS.arm), MODE.DISARMED);
+  assert.equal(store.getItem(KEYS.arm), null);
+  store.setItem(KEYS.arm, MODE.ARMED);
   const restored = loadState(store, '', '2026-09-23T19:06:00.000Z');
   assert.equal(restored.mode, MODE.PANIC);
   assert.equal(restored.panicAt, '2026-09-23T19:05:00.000Z');
@@ -99,12 +102,16 @@ test('panic flag survives localStorage and outranks a stored arm', () => {
   assert.equal(loadState(store, '', T).mode, MODE.DISARMED);
 });
 
-test('armed state restores only when the dry-run acknowledgement is still stored', () => {
+test('reload never restores an ARMED display', () => {
   const store = mem();
-  writeStore(store, arm(loadState(store, '', T)));
-  assert.equal(loadState(store, '', T).mode, MODE.ARMED);
-  store.setItem(KEYS.dryRunAck, '0');
+  store.setItem(KEYS.arm, MODE.ARMED);
+  store.setItem(KEYS.dryRunAck, '1');
   assert.equal(loadState(store, '', T).mode, MODE.DISARMED);
+  const armed = arm(loadState(store, '', T));
+  assert.equal(armed.mode, MODE.ARMED);
+  writeStore(store, armed);
+  assert.equal(store.getItem(KEYS.arm), null);
+  assert.equal(loadState(store, '?panicWebhook=https://evil.example/arm', T).mode, MODE.DISARMED);
 });
 
 test('a query string cannot set a STOP destination', () => {
@@ -142,7 +149,14 @@ test('live page is linked from the paper dashboard and contains no credentials',
   assert.match(index, /href="live\.html"/);
   assert.match(html, /href="index\.html"/);
   assert.match(html, /id="bStop"/);
-  assert.match(html, /CLEAR PANIC \(OPERATOR\)/);
+  assert.match(html, /LOCAL DEMO RESET/);
+  assert.ok(html.includes(THRESHOLD_COPY));
+  assert.ok(html.includes(RESET_DISCLAIMER));
+  assert.equal(PLACEHOLDER.cash, UNKNOWN);
+  assert.equal(PLACEHOLDER.pnl, UNKNOWN);
+  assert.doesNotMatch(html, /max loss/i);
+  assert.doesNotMatch(html, /\$0/);
+  assert.doesNotMatch(page, /\.arc\(|\.fill\(/);
   assert.match(html, /id="ack"/);
   assert.match(html, /id="bArm"/);
   assert.match(root, /dist\/live\.html/);
@@ -156,7 +170,7 @@ test('live page is linked from the paper dashboard and contains no credentials',
   assert.match(html, /not an emergency exit/i);
   assert.match(page, /CONFIRM_TEXT/);
   assert.match(page, /localStorage/);
-  assert.doesNotMatch(page, /\bfetch\s*\(/);
+  assert.doesNotMatch(page, /\bfetch\s*\(|sendBeacon|XMLHttpRequest|new WebSocket|sessionStorage/);
   const src = [html, page, css, stateSrc, readme].join('\n');
   assert.doesNotMatch(src, /cb-access|api[_-]?secret|private[_-]?key|BEGIN [A-Z ]*PRIVATE|COINBASE_API/i);
   assert.doesNotMatch(src, /Trade Oversight executes/i);

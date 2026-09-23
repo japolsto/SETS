@@ -3,8 +3,8 @@
 
 import { drawLogo, sized } from './ui/draw.js';
 import {
-  BANNER_TEXT, CONFIRM_TEXT, KEYS, MAX_LOSS_USD, MODE, PLACEHOLDER, PORTFOLIO,
-  canArm, killFraction, loadState, reduce, writeStore,
+  BANNER_TEXT, CONFIRM_TEXT, KEYS, MODE, PLACEHOLDER, RESET_DISCLAIMER, RESET_LABEL,
+  canArm, loadState, reduce, writeStore,
 } from './live/state.js';
 
 const $ = (id) => document.getElementById(id);
@@ -62,11 +62,10 @@ function render() {
   $('mEq').textContent = PLACEHOLDER.equity;
   $('mPnl').textContent = PLACEHOLDER.pnl;
 
-  const frac = killFraction(null, MAX_LOSS_USD);
   $('killNote').textContent = panic
-    ? 'Local PANIC flag only. There is still no live mark, and liquidation is not wired. Kill stays at −$' + MAX_LOSS_USD + '.'
-    : 'PLACEHOLDER. No account feed, so the marker stays at $0. Kill is −$' + MAX_LOSS_USD + '.';
-  kill.el.dataset.frac = frac == null ? 'none' : String(frac);
+    ? 'Local PANIC flag only. P&L stays UNKNOWN. Liquidation is not wired. No marker is drawn.'
+    : 'Account data is unavailable. P&L is UNKNOWN. No marker is drawn.';
+  kill.el.dataset.frac = 'none';
 
   const orders = $('orders');
   orders.replaceChildren();
@@ -109,7 +108,7 @@ function drawKill() {
   const { g, w, h } = kill;
   g.clearRect(0, 0, w, h);
   const x0 = 2;
-  const x1 = w - 2;
+  const x1 = Math.max(x0 + 4, w - 2);
   const y = 8;
   const barH = Math.max(16, h - 16);
   const radius = barH / 2;
@@ -120,33 +119,9 @@ function drawKill() {
   g.arcTo(x0, y + barH, x0, y, radius);
   g.arcTo(x0, y, x1, y, radius);
   g.closePath();
-  const grad = g.createLinearGradient(x0, y, x1, y);
-  grad.addColorStop(0, '#dbeafe');
-  grad.addColorStop(0.72, '#dbeafe');
-  grad.addColorStop(1, '#fecaca');
-  g.fillStyle = grad;
-  g.fill();
-  g.strokeStyle = state.mode === MODE.PANIC ? '#dc2626' : '#d6e1f0';
-  g.lineWidth = 1;
+  g.strokeStyle = state.mode === MODE.PANIC ? '#fecaca' : '#d6e1f0';
+  g.lineWidth = 1.5;
   g.stroke();
-
-  const killX = x1 - Math.max(18, (x1 - x0) * 0.02);
-  g.strokeStyle = '#dc2626';
-  g.lineWidth = 2;
-  g.beginPath();
-  g.moveTo(killX, y + 2);
-  g.lineTo(killX, y + barH - 2);
-  g.stroke();
-
-  const mark = x0 + radius;
-  g.fillStyle = state.mode === MODE.PANIC ? '#dc2626' : '#2563eb';
-  g.beginPath();
-  g.arc(mark, y + barH / 2, 6, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#ffffff';
-  g.beginPath();
-  g.arc(mark, y + barH / 2, 2.5, 0, Math.PI * 2);
-  g.fill();
 }
 
 function openModal(kind) {
@@ -161,10 +136,10 @@ function openModal(kind) {
       : 'This latches PANIC in this browser and nothing else. It does not cancel orders, sell BTC, or convert to USDC. Liquidation is not wired.';
     $('modalOk').textContent = 'LATCH PANIC';
   } else {
-    $('modalTitle').textContent = 'CLEAR PANIC (OPERATOR)';
-    $('modalBody').textContent = 'Clear the local panic flag for ' + PORTFOLIO + '?';
-    $('modalWarn').textContent = 'Clears the local flag only. This page never sent a cancel, sell, or convert. The panel returns to DISARMED.';
-    $('modalOk').textContent = 'CLEAR PANIC';
+    $('modalTitle').textContent = RESET_LABEL;
+    $('modalBody').textContent = 'Reset the local demo panic flag for ' + PORTFOLIO + '?';
+    $('modalWarn').textContent = RESET_LABEL + '. ' + RESET_DISCLAIMER;
+    $('modalOk').textContent = RESET_LABEL;
   }
   if (!modal.open) modal.showModal();
   $('modalCancel').focus();

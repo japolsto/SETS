@@ -16,7 +16,7 @@
     <canvas id="logo" class="logo" aria-hidden="true"></canvas>
     <div class="brand">
       <h1>SETS <span>LIVE</span></h1>
-      <div class="sub">DEMO · NOT CONNECTED · UI ONLY · SETS-500 · BTC-USD SPOT · MAX LOSS −$75</div>
+      <div class="sub">DEMO · NOT CONNECTED · UI ONLY · SETS-500 · BTC-USD SPOT</div>
     </div>
     <a class="btn back" href="index.html">‹ PAPER</a>
     <div class="clock"><b id="clock">--:--:--</b><span class="pill idle" id="pill"><i></i><em id="pillText">DISARMED</em></span></div>
@@ -40,46 +40,48 @@
       <label id="armLabel">ARM STATE</label>
       <b id="armMode" aria-live="polite">DISARMED</b>
     </div>
-    <div class="facts">
-      <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">CAPPED SILO</span></div>
-      <div><label>PAIR</label><b>BTC-USD</b><span class="hint">SPOT</span></div>
-      <div><label>MAX LOSS</label><b class="loss">−$75</b><span class="hint">KILL</span></div>
-      <div><label>FROZEN GENOME</label><b id="genome">—</b><span class="hint" id="genomeNote">NOT FROZEN</span></div>
+    <div>
+      <div class="facts">
+        <div><label>PORTFOLIO</label><b>SETS-500</b><span class="hint">LABEL ONLY</span></div>
+        <div><label>PAIR</label><b>BTC-USD</b><span class="hint">SPOT</span></div>
+        <div><label>FROZEN GENOME</label><b id="genome">UNKNOWN</b><span class="hint" id="genomeNote">UNAVAILABLE</span></div>
+      </div>
+      <p class="threshold" id="threshold">Loss intervention threshold -$75; losses may exceed this.</p>
     </div>
   </section>
 
   <section class="panel killp">
-    <div class="ph"><h2>P&amp;L VS −$75 KILL</h2><span class="r">NO LIVE MARK</span></div>
-    <div class="phs" id="killNote">PLACEHOLDER. No account feed, so the marker stays at $0. Kill is −$75.</div>
-    <canvas id="kill" role="img" aria-label="P and L against a minus 75 dollar kill. No live mark. Marker sits at zero."></canvas>
-    <div class="kill-scale"><span>$0</span><span>NO MARK</span><span class="loss">KILL −$75</span></div>
+    <div class="ph"><h2>P&amp;L</h2><span class="r">UNKNOWN</span></div>
+    <div class="phs" id="killNote">Account data is unavailable. P&amp;L is UNKNOWN. No marker is drawn.</div>
+    <canvas id="kill" role="img" aria-label="Empty P and L scale. Account data is unavailable, so there is no marker and no zero reading."></canvas>
+    <div class="kill-scale"><span>UNKNOWN</span><span>NO MARKER</span><span class="loss">Loss intervention threshold -$75; losses may exceed this.</span></div>
   </section>
 
   <section class="panel">
-    <div class="ph"><h2>SILO BALANCES</h2><span class="tag">PLACEHOLDER</span></div>
-    <div class="phs">WAITING ON AN OPERATOR FEED. THIS PAGE DOES NOT READ THE COINBASE ACCOUNT.</div>
+    <div class="ph"><h2>SILO BALANCES</h2><span class="tag">UNKNOWN</span></div>
+    <div class="phs">ACCOUNT DATA IS UNAVAILABLE. THIS PAGE DOES NOT READ AN EXCHANGE ACCOUNT.</div>
     <div class="kv4 marks">
-      <div><label>CASH</label><b id="mCash">—</b><span class="hint">USDC · PLACEHOLDER</span></div>
-      <div><label>BTC</label><b id="mBtc">—</b><span class="hint">SETS-OWNED · PLACEHOLDER</span></div>
-      <div><label>EQUITY</label><b id="mEq">—</b><span class="hint">PLACEHOLDER</span></div>
-      <div><label>P&amp;L</label><b id="mPnl">—</b><span class="hint">VS KILL −$75</span></div>
+      <div><label>CASH</label><b id="mCash">UNKNOWN</b><span class="hint">USDC</span></div>
+      <div><label>BTC</label><b id="mBtc">UNKNOWN</b><span class="hint">SETS-OWNED</span></div>
+      <div><label>EQUITY</label><b id="mEq">UNKNOWN</b><span class="hint">UNAVAILABLE</span></div>
+      <div><label>P&amp;L</label><b id="mPnl">UNKNOWN</b><span class="hint">UNAVAILABLE</span></div>
     </div>
   </section>
 
   <section class="row books">
     <div class="panel live-book">
-      <div class="ph"><h2>OPEN ORDERS</h2><span class="badge off">PLACEHOLDER</span></div>
-      <div class="phs">SETS-500 ONLY · NONE REPORTED</div>
+      <div class="ph"><h2>OPEN ORDERS</h2><span class="badge off">UNKNOWN</span></div>
+      <div class="phs">ACCOUNT DATA UNAVAILABLE</div>
       <div class="gtable">
         <div class="gth"><span>SIDE</span><span>PRICE</span><span>SIZE</span><span>STATUS</span></div>
         <div id="orders">
-          <div class="grow2 ghost"><span class="l">—</span><span>—</span><span>—</span><span class="s">NONE REPORTED</span></div>
+          <div class="grow2 ghost"><span class="l">UNKNOWN</span><span>UNKNOWN</span><span>UNKNOWN</span><span class="s">UNKNOWN</span></div>
         </div>
       </div>
     </div>
     <div class="panel live-log">
       <div class="ph"><h2>SIGNAL / FILL LOG</h2><span class="r">OPERATOR EVENTS</span></div>
-      <div class="phs">NO FILLS REPORTED · PAPER EVOLUTION STAYS ON THE PAPER DASHBOARD</div>
+      <div class="phs">FILLS UNKNOWN · PAPER EVOLUTION STAYS ON THE PAPER DASHBOARD</div>
       <div id="log" class="log" aria-live="polite"></div>
     </div>
   </section>
@@ -93,8 +95,9 @@
     <div class="op-row">
       <button id="bArm" class="btn pri" type="button" disabled>ARM</button>
       <button id="bDisarm" class="btn" type="button" disabled>DISARM</button>
-      <button id="bClear" class="btn warn" type="button" disabled>CLEAR PANIC (OPERATOR)</button>
+      <button id="bClear" class="btn warn" type="button" disabled>LOCAL DEMO RESET</button>
     </div>
+    <p class="phs" id="resetNote">LOCAL DEMO RESET clears the local panic flag only. There is no claim that orders or exposure are resolved.</p>
     <div class="demo-note">
       <label>STOP DESTINATION</label>
       <p>Not connected. This page has no webhook field and ignores <span class="mono">?panicWebhook=</span>. A query string cannot choose where STOP goes, because STOP does not go anywhere.</p>

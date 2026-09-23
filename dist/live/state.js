@@ -9,6 +9,10 @@ export const MAX_LOSS_USD = 75;
 export const DEMO_LABEL = 'DEMO · NOT CONNECTED · UI ONLY';
 export const CONFIRM_TEXT = 'Latch a local PANIC flag for SETS-500 in this browser only?';
 export const BANNER_TEXT = 'PANIC LATCHED';
+export const THRESHOLD_COPY = 'Loss intervention threshold -$75; losses may exceed this.';
+export const RESET_LABEL = 'LOCAL DEMO RESET';
+export const RESET_DISCLAIMER = 'There is no claim that orders or exposure are resolved.';
+export const UNKNOWN = 'UNKNOWN';
 export const LEGACY_WEBHOOK_KEY = 'sets.live.webhook';
 
 export const MODE = {
@@ -25,13 +29,13 @@ export const KEYS = {
 };
 
 export const PLACEHOLDER = {
-  cash: '—',
-  btc: '—',
-  equity: '—',
-  pnl: '—',
-  genome: '—',
-  genomeNote: 'NOT FROZEN',
-  orders: 'NONE REPORTED',
+  cash: UNKNOWN,
+  btc: UNKNOWN,
+  equity: UNKNOWN,
+  pnl: UNKNOWN,
+  genome: UNKNOWN,
+  genomeNote: 'UNAVAILABLE',
+  orders: UNKNOWN,
 };
 
 const LOG_MAX = 40;
@@ -64,11 +68,9 @@ function scrubDestination(storage) {
 export function readStore(storage) {
   const panic = storage.getItem(KEYS.panic) === '1';
   const dryRunAck = storage.getItem(KEYS.dryRunAck) === '1';
-  const arm = storage.getItem(KEYS.arm);
   const panicAt = storage.getItem(KEYS.panicAt) || null;
-  let mode = MODE.DISARMED;
-  if (panic) mode = MODE.PANIC;
-  else if (arm === MODE.ARMED && dryRunAck) mode = MODE.ARMED;
+  // A stored arm flag is never shown. Reload starts DISARMED unless a local panic flag is set.
+  const mode = panic ? MODE.PANIC : MODE.DISARMED;
   return {
     mode,
     dryRunAck,
@@ -78,10 +80,10 @@ export function readStore(storage) {
 
 export function writeStore(storage, state) {
   scrubDestination(storage);
+  storage.removeItem(KEYS.arm);
   storage.setItem(KEYS.panic, state.mode === MODE.PANIC ? '1' : '0');
   if (state.mode === MODE.PANIC && state.panicAt) storage.setItem(KEYS.panicAt, String(state.panicAt));
   else storage.removeItem(KEYS.panicAt);
-  storage.setItem(KEYS.arm, state.mode === MODE.ARMED ? MODE.ARMED : MODE.DISARMED);
   storage.setItem(KEYS.dryRunAck, state.dryRunAck ? '1' : '0');
 }
 
@@ -89,11 +91,9 @@ export function writeStore(storage, state) {
 export function loadState(storage, _search, now) {
   scrubDestination(storage);
   const saved = readStore(storage);
-  const log = [stamp(now, 'SYS', 'Demonstration idle. Not connected. Cash, BTC, equity, genome, orders, and P&L are placeholders. STOP only latches a local flag.')];
+  const log = [stamp(now, 'SYS', 'Demonstration idle. Not connected. Cash, BTC, equity, genome, orders, and P&L are UNKNOWN. STOP only latches a local flag. A stored arm is not restored.')];
   if (saved.mode === MODE.PANIC) {
-    log.push(stamp(now, 'PANIC', 'Local panic flag restored from this browser. Liquidation is not wired.'));
-  } else if (saved.mode === MODE.ARMED) {
-    log.push(stamp(now, 'ARM', 'Dry-run demo arm restored from this browser. Operational arm is not connected.'));
+    log.push(stamp(now, 'PANIC', 'Local panic flag restored from this browser. Liquidation is not wired. Arm state was not restored.'));
   }
   return {
     mode: saved.mode,
@@ -155,7 +155,7 @@ export function reduce(state, action, now = null) {
         ...state,
         mode: MODE.DISARMED,
         panicAt: null,
-        log: pushLog(state, stamp(now, 'ARM', 'Local panic flag cleared. No liquidation was sent. Panel is DISARMED.')),
+        log: pushLog(state, stamp(now, 'ARM', 'Local demo reset. There is no claim that orders or exposure are resolved. Panel is DISARMED.')),
       };
     }
     default:
